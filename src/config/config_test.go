@@ -21,9 +21,15 @@ func TestFromEnv_Defaults(t *testing.T) {
 
 func TestFromEnv_Override(t *testing.T) {
 	os.Clearenv()
-	os.Setenv("BROKER_TYPE", "mqtt")
-	os.Setenv("COMPONENT_ID", "drone_1")
-	os.Setenv("HEALTH_PORT", "9090")
+	if err := os.Setenv("BROKER_TYPE", "mqtt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("COMPONENT_ID", "drone_1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("HEALTH_PORT", "9090"); err != nil {
+		t.Fatal(err)
+	}
 	cfg := FromEnv()
 	if cfg.BrokerType != "mqtt" {
 		t.Errorf("BrokerType: got %s", cfg.BrokerType)

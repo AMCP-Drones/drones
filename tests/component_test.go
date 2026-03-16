@@ -92,7 +92,7 @@ func TestDeliveryDrone_Echo(t *testing.T) {
 	if err := drone.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	defer drone.Stop(ctx)
+	defer func() { _ = drone.Stop(ctx) }()
 
 	bus.Deliver(map[string]interface{}{
 		"action":         "echo",
@@ -126,7 +126,7 @@ func TestDeliveryDrone_DeliverPackage(t *testing.T) {
 	if err := drone.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	defer drone.Stop(ctx)
+	defer func() { _ = drone.Stop(ctx) }()
 
 	bus.Deliver(map[string]interface{}{
 		"action":         "deliver_package",
@@ -155,7 +155,7 @@ func TestDeliveryDrone_GetDeliveryStatus(t *testing.T) {
 	if err := drone.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	defer drone.Stop(ctx)
+	defer func() { _ = drone.Stop(ctx) }()
 
 	bus.Deliver(map[string]interface{}{
 		"action":         "get_delivery_status",
