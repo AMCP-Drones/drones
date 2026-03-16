@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds broker and component configuration from env.
@@ -39,11 +40,11 @@ func FromEnv() *Config {
 	if componentID == "" {
 		componentID = "delivery_drone"
 	}
-	systemName := os.Getenv("SYSTEM_NAME")
+	systemName := strings.TrimSpace(os.Getenv("SYSTEM_NAME"))
 	if systemName == "" {
 		systemName = "deliverydron"
 	}
-	componentTopic := os.Getenv("COMPONENT_TOPIC")
+	componentTopic := strings.TrimSpace(os.Getenv("COMPONENT_TOPIC"))
 	if componentTopic == "" {
 		componentTopic = systemName + "." + componentID
 	}

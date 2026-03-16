@@ -51,10 +51,18 @@ def rewrite_path(original: str, from_dir: Path, to_dir: Path) -> str:
 def rewrite_volumes(volumes: list, from_dir: Path, to_dir: Path) -> list:
     result = []
     for vol in volumes:
-        parts = vol.split(":")
-        if len(parts) >= 2 and not parts[0].startswith("/") and not parts[0].startswith("$"):
-            parts[0] = rewrite_path(parts[0], from_dir, to_dir)
-        result.append(":".join(parts))
+        if isinstance(vol, dict):
+            vol_copy = vol.copy()
+            if "source" in vol_copy:
+                source = vol_copy["source"]
+                if not source.startswith("/") and not source.startswith("$"):
+                    vol_copy["source"] = rewrite_path(source, from_dir, to_dir)
+            result.append(vol_copy)
+        else:
+            parts = vol.split(":")
+            if len(parts) >= 2 and not parts[0].startswith("/") and not parts[0].startswith("$"):
+                parts[0] = rewrite_path(parts[0], from_dir, to_dir)
+            result.append(":".join(parts))
     return result
 
 

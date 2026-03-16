@@ -47,4 +47,4 @@ Or from this directory:
 
 ## Broker
 
-Broker (Kafka or MQTT) is defined in repo root `docker/docker-compose.yml`. The prepare script merges it with this system’s services into `.generated/`. Use `BROKER_TYPE=kafka` (default) or `mqtt` when starting.
+Broker (Kafka or MQTT) is defined in repo root `docker/docker-compose.yml`. The prepare script merges it with this system's services into `.generated/`. Use `BROKER_TYPE=kafka` (default) or `mqtt` when starting.

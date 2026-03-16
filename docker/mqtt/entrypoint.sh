@@ -15,7 +15,11 @@ env | grep '^COMPONENT_USER_' | sort | while IFS='=' read -r VAR USERNAME; do
   [ -z "$USERNAME" ] && continue
   SUFFIX="${VAR#COMPONENT_USER_}"
   PASSWORD_VAR="COMPONENT_PASSWORD_${SUFFIX}"
-  PASSWORD=$(eval echo "\$$PASSWORD_VAR")
+  PASSWORD="$(printenv "$PASSWORD_VAR")"
+  if [ -z "$PASSWORD" ]; then
+    echo "[mqtt-entrypoint] WARNING: $PASSWORD_VAR is empty, skipping user $USERNAME" >&2
+    continue
+  fi
   mosquitto_passwd -b /mosquitto/data/passwd "$USERNAME" "$PASSWORD"
   printf "\nuser %s\ntopic readwrite #\n" "$USERNAME" >> /mosquitto/data/acl
 done

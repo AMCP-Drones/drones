@@ -11,7 +11,7 @@ env | grep '^COMPONENT_USER_' | sort | while IFS='=' read -r VAR USERNAME; do
   [ -z "$USERNAME" ] && continue
   SUFFIX="${VAR#COMPONENT_USER_}"
   PASSWORD_VAR="COMPONENT_PASSWORD_${SUFFIX}"
-  PASSWORD=$(eval echo "\$$PASSWORD_VAR")
+  PASSWORD="$(printenv "$PASSWORD_VAR")"
   [ -z "$PASSWORD" ] && continue
   printf '    user_%s="%s"\n' "$USERNAME" "$PASSWORD" >> "$USERS_FILE"
 done
@@ -40,6 +40,6 @@ done
 rm -f "$USERS_FILE"
 
 echo "[kafka-entrypoint] JAAS config generated with admin + component users"
-cat /tmp/jaas.conf
+if [ "$DEBUG" = "1" ]; then cat /tmp/jaas.conf; fi
 
 exec /etc/kafka/docker/run
