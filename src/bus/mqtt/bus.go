@@ -60,7 +60,7 @@ func (b *Bus) mqttToTopic(mqttTopic string) string {
 	return strings.ReplaceAll(mqttTopic, "/", ".")
 }
 
-func (b *Bus) getClient(ctx context.Context) (mqtt.Client, error) {
+func (b *Bus) getClient(_ context.Context) (mqtt.Client, error) {
 	if b.client != nil && b.client.IsConnected() {
 		return b.client, nil
 	}

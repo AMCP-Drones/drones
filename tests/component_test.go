@@ -20,7 +20,7 @@ type mockBus struct {
 	subscribed string
 }
 
-func (m *mockBus) Publish(ctx context.Context, topic string, message map[string]interface{}) error {
+func (m *mockBus) Publish(_ context.Context, topic string, message map[string]interface{}) error {
 	m.mu.Lock()
 	m.published = append(m.published, struct {
 		topic   string
@@ -30,7 +30,7 @@ func (m *mockBus) Publish(ctx context.Context, topic string, message map[string]
 	return nil
 }
 
-func (m *mockBus) Subscribe(ctx context.Context, topic string, handler func(map[string]interface{})) error {
+func (m *mockBus) Subscribe(_ context.Context, topic string, handler func(map[string]interface{})) error {
 	m.mu.Lock()
 	m.subscribed = topic
 	m.handler = handler
@@ -38,7 +38,7 @@ func (m *mockBus) Subscribe(ctx context.Context, topic string, handler func(map[
 	return nil
 }
 
-func (m *mockBus) Unsubscribe(ctx context.Context, topic string) error {
+func (m *mockBus) Unsubscribe(_ context.Context, topic string) error {
 	m.mu.Lock()
 	m.handler = nil
 	m.subscribed = ""
@@ -46,15 +46,15 @@ func (m *mockBus) Unsubscribe(ctx context.Context, topic string) error {
 	return nil
 }
 
-func (m *mockBus) Request(ctx context.Context, topic string, message map[string]interface{}, timeoutSec float64) (map[string]interface{}, error) {
+func (m *mockBus) Request(_ context.Context, topic string, message map[string]interface{}, timeoutSec float64) (map[string]interface{}, error) {
 	return sdk.CreateResponse("req1", map[string]interface{}{"ok": true}, "mock", true, ""), nil
 }
 
-func (m *mockBus) Start(ctx context.Context) error {
+func (m *mockBus) Start(_ context.Context) error {
 	return nil
 }
 
-func (m *mockBus) Stop(ctx context.Context) error {
+func (m *mockBus) Stop(_ context.Context) error {
 	return nil
 }
 
