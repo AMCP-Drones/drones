@@ -1,3 +1,4 @@
+// Package kafka implements the bus.Bus interface using Apache Kafka.
 package kafka
 
 import (
@@ -168,6 +169,7 @@ func (h *consumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, clai
 func (h *consumerHandler) Setup(sarama.ConsumerGroupSession) error   { return nil }
 func (h *consumerHandler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 
+// Start starts the bus: creates producer and consumer group, subscribes to handler and reply topics.
 func (b *Bus) Start(ctx context.Context) error {
 	if b.running {
 		return nil
@@ -185,7 +187,8 @@ func (b *Bus) Start(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bus) Stop(ctx context.Context) error {
+// Stop stops the consumer and producer and releases resources.
+func (b *Bus) Stop(_ context.Context) error {
 	if !b.running {
 		return nil
 	}
@@ -210,25 +213,28 @@ func (b *Bus) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bus) Publish(ctx context.Context, topic string, message map[string]interface{}) error {
+// Publish sends a JSON message to the given topic.
+func (b *Bus) Publish(_ context.Context, topic string, message map[string]interface{}) error {
 	return b.publishJSON(topic, message)
 }
 
 // Subscribe registers a handler for the topic. Call Subscribe for all topics before Start().
-func (b *Bus) Subscribe(ctx context.Context, topic string, handler func(map[string]interface{})) error {
+func (b *Bus) Subscribe(_ context.Context, topic string, handler func(map[string]interface{})) error {
 	b.handlersMu.Lock()
 	b.handlers[topic] = handler
 	b.handlersMu.Unlock()
 	return nil
 }
 
-func (b *Bus) Unsubscribe(ctx context.Context, topic string) error {
+// Unsubscribe removes the handler for the topic.
+func (b *Bus) Unsubscribe(_ context.Context, topic string) error {
 	b.handlersMu.Lock()
 	delete(b.handlers, topic)
 	b.handlersMu.Unlock()
 	return nil
 }
 
+// Request publishes a message with correlation_id and reply_to, then waits for a response or timeout.
 func (b *Bus) Request(ctx context.Context, topic string, message map[string]interface{}, timeoutSec float64) (map[string]interface{}, error) {
 	if !b.running {
 		if err := b.Start(ctx); err != nil {

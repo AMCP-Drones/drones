@@ -77,7 +77,7 @@ func (c *BaseComponent) handleMessage(ctx context.Context, message map[string]in
 	if h == nil {
 		log.Printf("[%s] unknown action: %s", c.ComponentID, action)
 		if replyTo, _ := message["reply_to"].(string); replyTo != "" {
-			if err := bus.Respond(c.Bus, ctx, message, map[string]interface{}{"error": "unknown action: " + action}, c.ComponentID, false, "unknown action"); err != nil {
+			if err := bus.Respond(ctx, c.Bus, message, map[string]interface{}{"error": "unknown action: " + action}, c.ComponentID, false, "unknown action"); err != nil {
 				log.Printf("[%s] respond unknown action: %v", c.ComponentID, err)
 			}
 		}
@@ -86,7 +86,7 @@ func (c *BaseComponent) handleMessage(ctx context.Context, message map[string]in
 	result, err := h(ctx, message)
 	if replyTo, _ := message["reply_to"].(string); replyTo != "" {
 		if err != nil {
-			if errResp := bus.Respond(c.Bus, ctx, message, map[string]interface{}{}, c.ComponentID, false, err.Error()); errResp != nil {
+			if errResp := bus.Respond(ctx, c.Bus, message, map[string]interface{}{}, c.ComponentID, false, err.Error()); errResp != nil {
 				log.Printf("[%s] respond error: %v", c.ComponentID, errResp)
 			}
 			return
