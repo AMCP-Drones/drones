@@ -4,13 +4,16 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds broker and component configuration from env.
 type Config struct {
-	BrokerType   string // kafka | mqtt
-	ComponentID  string // COMPONENT_ID or SYSTEM_ID
-	HealthPort   string // HEALTH_PORT for HTTP health endpoint
+	BrokerType     string // kafka | mqtt
+	ComponentID    string // COMPONENT_ID or SYSTEM_ID
+	ComponentTopic string // COMPONENT_TOPIC or SYSTEM_NAME.COMPONENT_ID
+	SystemName     string // SYSTEM_NAME (default deliverydron)
+	HealthPort     string // HEALTH_PORT for HTTP health endpoint
 
 	// Kafka
 	KafkaBootstrap   string
@@ -36,6 +39,14 @@ func FromEnv() *Config {
 	}
 	if componentID == "" {
 		componentID = "delivery_drone"
+	}
+	systemName := strings.TrimSpace(os.Getenv("SYSTEM_NAME"))
+	if systemName == "" {
+		systemName = "deliverydron"
+	}
+	componentTopic := strings.TrimSpace(os.Getenv("COMPONENT_TOPIC"))
+	if componentTopic == "" {
+		componentTopic = systemName + "." + componentID
 	}
 	healthPort := os.Getenv("HEALTH_PORT")
 	if healthPort == "" {
@@ -80,10 +91,12 @@ func FromEnv() *Config {
 	}
 
 	return &Config{
-		BrokerType:      brokerType,
-		ComponentID:     componentID,
-		HealthPort:      healthPort,
-		KafkaBootstrap:  kafkaBootstrap,
+		BrokerType:     brokerType,
+		ComponentID:    componentID,
+		ComponentTopic: componentTopic,
+		SystemName:     systemName,
+		HealthPort:     healthPort,
+		KafkaBootstrap: kafkaBootstrap,
 		KafkaGroupID:    kafkaGroupID,
 		BrokerUser:      os.Getenv("BROKER_USER"),
 		BrokerPassword:  os.Getenv("BROKER_PASSWORD"),
