@@ -82,7 +82,7 @@ func (d *Drone) handleDeliverPackage(_ context.Context, message map[string]inter
 	}, nil
 }
 
-func (d *Drone) handleGetDeliveryStatus(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (d *Drone) handleGetDeliveryStatus(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
 	d.stateMu.RLock()
 	defer d.stateMu.RUnlock()
 	out := make(map[string]interface{})

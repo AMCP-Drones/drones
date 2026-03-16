@@ -46,14 +46,14 @@ func (c *BaseComponent) RegisterHandler(action string, h Handler) {
 	c.handlers[action] = h
 }
 
-func (c *BaseComponent) handlePing(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (c *BaseComponent) handlePing(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
 	return map[string]interface{}{
 		"pong":         true,
 		"component_id": c.ComponentID,
 	}, nil
 }
 
-func (c *BaseComponent) handleGetStatus(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (c *BaseComponent) handleGetStatus(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
 	actions := make([]string, 0, len(c.handlers))
 	for a := range c.handlers {
 		actions = append(actions, a)

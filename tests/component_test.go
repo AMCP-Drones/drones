@@ -38,7 +38,7 @@ func (m *mockBus) Subscribe(_ context.Context, topic string, handler func(map[st
 	return nil
 }
 
-func (m *mockBus) Unsubscribe(_ context.Context, topic string) error {
+func (m *mockBus) Unsubscribe(_ context.Context, _ string) error {
 	m.mu.Lock()
 	m.handler = nil
 	m.subscribed = ""
@@ -46,7 +46,7 @@ func (m *mockBus) Unsubscribe(_ context.Context, topic string) error {
 	return nil
 }
 
-func (m *mockBus) Request(_ context.Context, topic string, message map[string]interface{}, timeoutSec float64) (map[string]interface{}, error) {
+func (m *mockBus) Request(_ context.Context, _ string, _ map[string]interface{}, _ float64) (map[string]interface{}, error) {
 	return sdk.CreateResponse("req1", map[string]interface{}{"ok": true}, "mock", true, ""), nil
 }
 
