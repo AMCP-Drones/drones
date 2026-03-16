@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -24,7 +25,7 @@ type Bus struct {
 	handlersMu      sync.RWMutex
 	pending         map[string]chan map[string]interface{}
 	pendingMu       sync.Mutex
-	consumerGroupID  string
+	consumerGroupID string
 	running         bool
 	consumeCancel   context.CancelFunc
 	consumeCtx      context.Context
@@ -38,14 +39,14 @@ func New(broker, clientID, groupID, username, password string) *Bus {
 	}
 	replyTopic := "replies." + clientID + "." + fmt.Sprintf("%d", time.Now().UnixNano()%100000)
 	return &Bus{
-		broker:         broker,
-		clientID:       clientID,
-		groupID:        groupID,
-		username:       username,
-		password:       password,
-		replyTopic:     replyTopic,
-		handlers:       make(map[string]func(map[string]interface{})),
-		pending:        make(map[string]chan map[string]interface{}),
+		broker:          broker,
+		clientID:        clientID,
+		groupID:         groupID,
+		username:        username,
+		password:        password,
+		replyTopic:      replyTopic,
+		handlers:        make(map[string]func(map[string]interface{})),
+		pending:         make(map[string]chan map[string]interface{}),
 		consumerGroupID: groupID + "_cg",
 	}
 }
@@ -119,8 +120,12 @@ func (b *Bus) startConsumer(ctx context.Context) {
 	b.consumeTopicsMu.Unlock()
 	topics := b.getTopics()
 	handler := &consumerHandler{bus: b}
-	_ = group.Consume(ctx, topics, handler)
-	_ = group.Close()
+	if err := group.Consume(ctx, topics, handler); err != nil && ctx.Err() == nil {
+		log.Printf("kafka consume: %v", err)
+	}
+	if err := group.Close(); err != nil {
+		log.Printf("kafka consumer group close: %v", err)
+	}
 }
 
 type consumerHandler struct {
@@ -170,7 +175,9 @@ func (b *Bus) Start(ctx context.Context) error {
 	if _, err := b.getProducer(); err != nil {
 		return err
 	}
-	_ = b.publishJSON(b.replyTopic, map[string]interface{}{"_init": true})
+	if err := b.publishJSON(b.replyTopic, map[string]interface{}{"_init": true}); err != nil {
+		log.Printf("kafka reply topic init publish: %v", err)
+	}
 	b.running = true
 	b.consumeCtx, b.consumeCancel = context.WithCancel(ctx)
 	go b.startConsumer(b.consumeCtx)
@@ -190,10 +197,14 @@ func (b *Bus) Stop(ctx context.Context) error {
 	cg := b.consumer
 	b.consumeTopicsMu.Unlock()
 	if cg != nil {
-		_ = cg.Close()
+		if err := cg.Close(); err != nil {
+			log.Printf("kafka consumer close: %v", err)
+		}
 	}
 	if b.producer != nil {
-		_ = b.producer.Close()
+		if err := b.producer.Close(); err != nil {
+			log.Printf("kafka producer close: %v", err)
+		}
 		b.producer = nil
 	}
 	return nil

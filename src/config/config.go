@@ -15,15 +15,15 @@ type Config struct {
 	HealthPort     string // HEALTH_PORT for HTTP health endpoint
 
 	// Kafka
-	KafkaBootstrap   string
-	KafkaGroupID     string
-	BrokerUser       string
-	BrokerPassword   string
+	KafkaBootstrap string
+	KafkaGroupID   string
+	BrokerUser     string
+	BrokerPassword string
 
 	// MQTT
 	MQTTBroker string
 	MQTTPort   int
-	MQTTQoS   int
+	MQTTQoS    int
 }
 
 // FromEnv loads configuration from environment variables.
@@ -96,11 +96,11 @@ func FromEnv() *Config {
 		SystemName:     systemName,
 		HealthPort:     healthPort,
 		KafkaBootstrap: kafkaBootstrap,
-		KafkaGroupID:    kafkaGroupID,
-		BrokerUser:      os.Getenv("BROKER_USER"),
-		BrokerPassword:  os.Getenv("BROKER_PASSWORD"),
-		MQTTBroker:      mqttBroker,
-		MQTTPort:        mqttPort,
-		MQTTQoS:         mqttQoS,
+		KafkaGroupID:   kafkaGroupID,
+		BrokerUser:     os.Getenv("BROKER_USER"),
+		BrokerPassword: os.Getenv("BROKER_PASSWORD"),
+		MQTTBroker:     mqttBroker,
+		MQTTPort:       mqttPort,
+		MQTTQoS:        mqttQoS,
 	}
 }

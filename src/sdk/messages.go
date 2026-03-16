@@ -72,7 +72,7 @@ func ParseMessage(data []byte) (Message, error) {
 func (m Message) ToMap() map[string]interface{} {
 	out := map[string]interface{}{
 		"action":    m.Action,
-		"payload":  m.Payload,
+		"payload":   m.Payload,
 		"sender":    m.Sender,
 		"timestamp": m.Timestamp,
 	}

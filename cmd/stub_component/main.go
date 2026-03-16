@@ -11,8 +11,8 @@ import (
 	"syscall"
 
 	"github.com/AMCP-Drones/drones/src/bus"
-	"github.com/AMCP-Drones/drones/src/config"
 	"github.com/AMCP-Drones/drones/src/component"
+	"github.com/AMCP-Drones/drones/src/config"
 )
 
 func main() {
@@ -41,5 +41,7 @@ func main() {
 	<-sig
 	log.Printf("[%s] shutting down", cfg.ComponentID)
 	cancel()
-	_ = c.Stop(context.Background())
+	if err := c.Stop(context.Background()); err != nil {
+		log.Printf("stop: %v", err)
+	}
 }

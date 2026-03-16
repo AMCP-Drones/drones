@@ -48,7 +48,7 @@ func (c *BaseComponent) RegisterHandler(action string, h Handler) {
 
 func (c *BaseComponent) handlePing(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	return map[string]interface{}{
-		"pong":        true,
+		"pong":         true,
 		"component_id": c.ComponentID,
 	}, nil
 }
@@ -61,9 +61,9 @@ func (c *BaseComponent) handleGetStatus(ctx context.Context, message map[string]
 	return map[string]interface{}{
 		"component_id":   c.ComponentID,
 		"component_type": c.ComponentType,
-		"topic":         c.Topic,
-		"running":       c.running,
-		"handlers":      actions,
+		"topic":          c.Topic,
+		"running":        c.running,
+		"handlers":       actions,
 	}, nil
 }
 
@@ -77,14 +77,18 @@ func (c *BaseComponent) handleMessage(ctx context.Context, message map[string]in
 	if h == nil {
 		log.Printf("[%s] unknown action: %s", c.ComponentID, action)
 		if replyTo, _ := message["reply_to"].(string); replyTo != "" {
-			_ = bus.Respond(c.Bus, ctx, message, map[string]interface{}{"error": "unknown action: " + action}, c.ComponentID, false, "unknown action")
+			if err := bus.Respond(c.Bus, ctx, message, map[string]interface{}{"error": "unknown action: " + action}, c.ComponentID, false, "unknown action"); err != nil {
+				log.Printf("[%s] respond unknown action: %v", c.ComponentID, err)
+			}
 		}
 		return
 	}
 	result, err := h(ctx, message)
 	if replyTo, _ := message["reply_to"].(string); replyTo != "" {
 		if err != nil {
-			_ = bus.Respond(c.Bus, ctx, message, map[string]interface{}{}, c.ComponentID, false, err.Error())
+			if errResp := bus.Respond(c.Bus, ctx, message, map[string]interface{}{}, c.ComponentID, false, err.Error()); errResp != nil {
+				log.Printf("[%s] respond error: %v", c.ComponentID, errResp)
+			}
 			return
 		}
 		if result != nil {
@@ -96,7 +100,9 @@ func (c *BaseComponent) handleMessage(ctx context.Context, message map[string]in
 				true,
 				"",
 			)
-			_ = c.Bus.Publish(ctx, replyTo, resp)
+			if err := c.Bus.Publish(ctx, replyTo, resp); err != nil {
+				log.Printf("[%s] publish response: %v", c.ComponentID, err)
+			}
 		}
 	}
 }
@@ -133,8 +139,12 @@ func (c *BaseComponent) Stop(ctx context.Context) error {
 		return nil
 	}
 	c.running = false
-	_ = c.Bus.Unsubscribe(ctx, c.Topic)
-	_ = c.Bus.Stop(ctx)
+	if err := c.Bus.Unsubscribe(ctx, c.Topic); err != nil {
+		log.Printf("[%s] unsubscribe: %v", c.ComponentID, err)
+	}
+	if err := c.Bus.Stop(ctx); err != nil {
+		log.Printf("[%s] bus stop: %v", c.ComponentID, err)
+	}
 	log.Printf("[%s] stopped", c.ComponentID)
 	return nil
 }

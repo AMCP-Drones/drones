@@ -11,8 +11,11 @@ import (
 
 // mockBus records published messages and invokes the subscribed handler when Deliver is called.
 type mockBus struct {
-	mu         sync.Mutex
-	published  []struct{ topic string; message map[string]interface{} }
+	mu        sync.Mutex
+	published []struct {
+		topic   string
+		message map[string]interface{}
+	}
 	handler    func(map[string]interface{})
 	subscribed string
 }
@@ -65,10 +68,16 @@ func (m *mockBus) Deliver(message map[string]interface{}) {
 	}
 }
 
-func (m *mockBus) Published() []struct{ Topic string; Message map[string]interface{} } {
+func (m *mockBus) Published() []struct {
+	Topic   string
+	Message map[string]interface{}
+} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	out := make([]struct{ Topic string; Message map[string]interface{} }, len(m.published))
+	out := make([]struct {
+		Topic   string
+		Message map[string]interface{}
+	}, len(m.published))
 	for i, p := range m.published {
 		out[i].Topic = p.topic
 		out[i].Message = p.message

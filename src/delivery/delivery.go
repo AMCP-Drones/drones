@@ -51,9 +51,9 @@ func (d *Drone) handleEcho(ctx context.Context, message map[string]interface{}) 
 		pl = map[string]interface{}{"value": payload}
 	}
 	return map[string]interface{}{
-		"echo":          pl,
-		"from":          d.ComponentID,
-		"component_id":  d.ComponentID,
+		"echo":         pl,
+		"from":         d.ComponentID,
+		"component_id": d.ComponentID,
 	}, nil
 }
 
