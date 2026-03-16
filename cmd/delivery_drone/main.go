@@ -24,7 +24,7 @@ func main() {
 		log.Fatalf("bus: %v", err)
 	}
 
-	drone := delivery.New(cfg.ComponentID, cfg.ComponentID, "components.delivery_drone", b)
+	drone := delivery.New(cfg.ComponentID, cfg.ComponentID, cfg.ComponentTopic, b)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

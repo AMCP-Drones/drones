@@ -1,9 +1,24 @@
-.PHONY: build test unit-test docker-build docker-up run vendor deps
+.PHONY: build test unit-test docker-build docker-up run vendor deps init prepare system-up system-down build-all
 
 BINARY := delivery-drone
 DOCKER_IMAGE := delivery_drone
 # Use vendored deps if present (avoids TLS timeouts / network at build time)
 BUILD_MOD := $(if $(wildcard vendor),-mod=vendor,)
+
+# Copy broker env so prepare_system.py can merge it (optional; script falls back to example.env)
+init:
+	@test -f docker/.env || (cp docker/example.env docker/.env && echo "Created docker/.env from example.env")
+
+# Generate systems/deliverydron/.generated/docker-compose.yml and .env (requires PyYAML: pip install pyyaml)
+prepare: init
+	python3 scripts/prepare_system.py systems/deliverydron
+
+# Start full deliverydron system (broker + all components). Run 'make vendor' first for offline Docker build.
+system-up:
+	@cd systems/deliverydron && $(MAKE) docker-up
+
+system-down:
+	@cd systems/deliverydron && $(MAKE) docker-down
 
 build:
 	GOPROXY=DIRECT CGO_ENABLED=0 go build $(BUILD_MOD) -o $(BINARY) ./cmd/delivery_drone
@@ -49,3 +64,7 @@ docker-up:
 
 run: build
 	./$(BINARY)
+
+# Build both delivery_drone and stub_component (used by system Dockerfiles)
+build-all:
+	GOPROXY=DIRECT CGO_ENABLED=0 go build $(BUILD_MOD) -o /dev/null ./cmd/delivery_drone ./cmd/stub_component
