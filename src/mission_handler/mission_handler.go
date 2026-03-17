@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/AMCP-Drones/drones/src/bus"
 	"github.com/AMCP-Drones/drones/src/component"
@@ -22,6 +23,7 @@ type MissionHandler struct {
 	journalTopic      string
 	limiterTopic      string
 	requestTimeoutSec float64
+	mu                sync.RWMutex
 	lastMission       map[string]interface{}
 	lastError         string
 }
@@ -80,23 +82,31 @@ func (m *MissionHandler) handleLoadMission(ctx context.Context, message map[stri
 	}
 	payload, _ := message["payload"].(map[string]interface{})
 	if payload == nil {
+		m.mu.Lock()
 		m.lastError = "invalid_input"
-		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": m.lastError})
-		return map[string]interface{}{"ok": false, "error": m.lastError}, nil
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": "invalid_input"})
+		return map[string]interface{}{"ok": false, "error": "invalid_input"}, nil
 	}
 	mission, errMsg := m.parseMission(payload)
 	if mission == nil {
+		m.mu.Lock()
 		m.lastError = errMsg
-		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": m.lastError})
-		return map[string]interface{}{"ok": false, "error": m.lastError}, nil
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": errMsg})
+		return map[string]interface{}{"ok": false, "error": errMsg}, nil
 	}
 	if ok, err := validateMission(mission); !ok {
+		m.mu.Lock()
 		m.lastError = err
-		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": m.lastError})
-		return map[string]interface{}{"ok": false, "error": m.lastError}, nil
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": err})
+		return map[string]interface{}{"ok": false, "error": err}, nil
 	}
+	m.mu.Lock()
 	m.lastMission = mission
 	m.lastError = ""
+	m.mu.Unlock()
 	mid, _ := mission["mission_id"].(string)
 	m.logToJournal(ctx, "MISSION_HANDLER_MISSION_RECEIVED", map[string]interface{}{"mission_id": mid})
 
@@ -110,21 +120,26 @@ func (m *MissionHandler) handleLoadMission(ctx context.Context, message map[stri
 	}
 	resp, err := m.Bus.Request(ctx, m.secMonitorTopic, proxyMsg, m.requestTimeoutSec)
 	if err != nil {
+		m.mu.Lock()
 		m.lastError = "autopilot_no_response"
-		m.logToJournal(ctx, "MISSION_HANDLER_AUTOPILOT_ERROR", map[string]interface{}{"error": m.lastError, "mission_id": mid})
-		return map[string]interface{}{"ok": false, "error": m.lastError}, nil
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_AUTOPILOT_ERROR", map[string]interface{}{"error": "autopilot_no_response", "mission_id": mid})
+		return map[string]interface{}{"ok": false, "error": "autopilot_no_response"}, nil
 	}
 	pl, _ := resp["payload"].(map[string]interface{})
 	tr, _ := pl["target_response"].(map[string]interface{})
 	if tr != nil {
 		trPl, _ := tr["payload"].(map[string]interface{})
 		if trPl != nil && trPl["ok"] != true {
-			m.lastError, _ = trPl["error"].(string)
-			if m.lastError == "" {
-				m.lastError = "autopilot_error"
+			errStr, _ := trPl["error"].(string)
+			if errStr == "" {
+				errStr = "autopilot_error"
 			}
-			m.logToJournal(ctx, "MISSION_HANDLER_AUTOPILOT_ERROR", map[string]interface{}{"error": m.lastError, "mission_id": mid})
-			return map[string]interface{}{"ok": false, "error": m.lastError}, nil
+			m.mu.Lock()
+			m.lastError = errStr
+			m.mu.Unlock()
+			m.logToJournal(ctx, "MISSION_HANDLER_AUTOPILOT_ERROR", map[string]interface{}{"error": errStr, "mission_id": mid})
+			return map[string]interface{}{"ok": false, "error": errStr}, nil
 		}
 	}
 	m.logToJournal(ctx, "MISSION_HANDLER_MISSION_SENT_TO_AUTOPILOT", map[string]interface{}{"mission_id": mid})
@@ -193,22 +208,30 @@ func (m *MissionHandler) handleValidateOnly(ctx context.Context, message map[str
 	}
 	payload, _ := message["payload"].(map[string]interface{})
 	if payload == nil {
+		m.mu.Lock()
 		m.lastError = "invalid_input"
-		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": m.lastError})
-		return map[string]interface{}{"ok": false, "error": m.lastError}, nil
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": "invalid_input"})
+		return map[string]interface{}{"ok": false, "error": "invalid_input"}, nil
 	}
 	mission, errMsg := m.parseMission(payload)
 	if mission == nil {
+		m.mu.Lock()
 		m.lastError = errMsg
-		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": m.lastError})
-		return map[string]interface{}{"ok": false, "error": m.lastError}, nil
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": errMsg})
+		return map[string]interface{}{"ok": false, "error": errMsg}, nil
 	}
 	if ok, err := validateMission(mission); !ok {
+		m.mu.Lock()
 		m.lastError = err
-		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": m.lastError})
-		return map[string]interface{}{"ok": false, "error": m.lastError}, nil
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_VALIDATION_ERROR", map[string]interface{}{"error": err})
+		return map[string]interface{}{"ok": false, "error": err}, nil
 	}
+	m.mu.Lock()
 	m.lastError = ""
+	m.mu.Unlock()
 	return map[string]interface{}{"ok": true}, nil
 }
 
@@ -216,6 +239,8 @@ func (m *MissionHandler) handleGetState(_ context.Context, message map[string]in
 	if !component.IsTrustedSender(message, "security_monitor") {
 		return nil, nil
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return map[string]interface{}{
 		"last_mission": m.lastMission,
 		"last_error":   m.lastError,

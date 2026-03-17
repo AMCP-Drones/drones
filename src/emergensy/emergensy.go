@@ -1,5 +1,5 @@
-// Package emergensy implements the emergency protocol: on limiter_event (EMERGENCY_LAND_REQUIRED) starts isolation, closes cargo, commands LAND to motors, logs to journal.
-package emergensy
+// Package emergency implements the emergency protocol: on limiter_event (EMERGENCY_LAND_REQUIRED) starts isolation, closes cargo, commands LAND to motors, logs to journal.
+package emergency
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"github.com/AMCP-Drones/drones/src/config"
 )
 
-// Emergensy handles limiter_event (EMERGENCY_LAND_REQUIRED): isolation, cargo close, motors LAND, journal.
-type Emergensy struct {
+// Emergency handles limiter_event (EMERGENCY_LAND_REQUIRED): isolation, cargo close, motors LAND, journal.
+type Emergency struct {
 	*component.BaseComponent
 	systemName      string
 	secMonitorTopic string
@@ -22,17 +22,17 @@ type Emergensy struct {
 	active          bool
 }
 
-// New creates an Emergensy component. Call Start after creation.
-func New(cfg *config.Config, b bus.Bus) *Emergensy {
+// New creates an Emergency component. Call Start after creation.
+func New(cfg *config.Config, b bus.Bus) *Emergency {
 	systemName := cfg.SystemName
 	if systemName == "" {
 		systemName = "deliverydron"
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "emergensy")
+		topic = config.TopicFor(systemName, "emergency")
 	}
-	base := component.NewBaseComponent(cfg.ComponentID, "emergensy", topic, b)
+	base := component.NewBaseComponent(cfg.ComponentID, "emergency", topic, b)
 	secTopic := os.Getenv("SECURITY_MONITOR_TOPIC")
 	if secTopic == "" {
 		secTopic = config.TopicFor(systemName, "security_monitor")
@@ -40,7 +40,7 @@ func New(cfg *config.Config, b bus.Bus) *Emergensy {
 	journalTopic := config.TopicFor(systemName, "journal")
 	motorsTopic := config.TopicFor(systemName, "motors")
 	cargoTopic := config.TopicFor(systemName, "cargo")
-	e := &Emergensy{
+	e := &Emergency{
 		BaseComponent:   base,
 		systemName:      systemName,
 		secMonitorTopic: secTopic,
@@ -53,13 +53,13 @@ func New(cfg *config.Config, b bus.Bus) *Emergensy {
 	return e
 }
 
-func (e *Emergensy) registerHandlers() {
+func (e *Emergency) registerHandlers() {
 	e.RegisterHandler("limiter_event", e.handleLimiterEvent)
 	e.RegisterHandler("get_state", e.handleGetState)
 }
 
-func (e *Emergensy) handleLimiterEvent(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
-	if !component.IsTrustedSender(message, "security_monitor") {
+func (e *Emergency) handleLimiterEvent(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !component.IsTrustedSender(message, "security_monitor") && !component.IsTrustedSender(message, "limiter") {
 		return nil, nil
 	}
 	payload, _ := message["payload"].(map[string]interface{})
@@ -85,6 +85,8 @@ func (e *Emergensy) handleLimiterEvent(ctx context.Context, message map[string]i
 	}
 	if err := e.Bus.Publish(ctx, e.secMonitorTopic, isolationMsg); err != nil {
 		log.Printf("[%s] ISOLATION_START: %v", e.ComponentID, err)
+		e.active = false
+		return map[string]interface{}{"ok": false, "error": "isolation_start_failed"}, nil
 	}
 
 	// 2. Cargo CLOSE via proxy_publish
@@ -98,6 +100,8 @@ func (e *Emergensy) handleLimiterEvent(ctx context.Context, message map[string]i
 	}
 	if err := e.Bus.Publish(ctx, e.secMonitorTopic, cargoMsg); err != nil {
 		log.Printf("[%s] cargo CLOSE: %v", e.ComponentID, err)
+		e.active = false
+		return map[string]interface{}{"ok": false, "error": "cargo_close_failed"}, nil
 	}
 
 	// 3. Motors LAND via proxy_publish
@@ -111,6 +115,8 @@ func (e *Emergensy) handleLimiterEvent(ctx context.Context, message map[string]i
 	}
 	if err := e.Bus.Publish(ctx, e.secMonitorTopic, motorsMsg); err != nil {
 		log.Printf("[%s] motors LAND: %v", e.ComponentID, err)
+		e.active = false
+		return map[string]interface{}{"ok": false, "error": "motors_land_failed"}, nil
 	}
 
 	// 4. Journal LOG_EVENT via proxy_publish
@@ -128,11 +134,13 @@ func (e *Emergensy) handleLimiterEvent(ctx context.Context, message map[string]i
 	}
 	if err := e.Bus.Publish(ctx, e.secMonitorTopic, journalMsg); err != nil {
 		log.Printf("[%s] journal LOG_EVENT: %v", e.ComponentID, err)
+		e.active = false
+		return map[string]interface{}{"ok": false, "error": "journal_log_failed"}, nil
 	}
 
 	return map[string]interface{}{"ok": true}, nil
 }
 
-func (e *Emergensy) handleGetState(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
+func (e *Emergency) handleGetState(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
 	return map[string]interface{}{"active": e.active}, nil
 }

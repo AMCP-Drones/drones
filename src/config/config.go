@@ -46,7 +46,7 @@ func FromEnv() *Config {
 	}
 	componentTopic := strings.TrimSpace(os.Getenv("COMPONENT_TOPIC"))
 	if componentTopic == "" {
-		componentTopic = systemName + "." + componentID
+		componentTopic = strings.TrimSpace(systemName) + "." + strings.TrimSpace(componentID)
 	}
 	healthPort := os.Getenv("HEALTH_PORT")
 	if healthPort == "" {

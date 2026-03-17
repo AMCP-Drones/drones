@@ -165,10 +165,14 @@ def prepare_system(system_dir: str):
                         build["dockerfile"] = "../" + df[len(system_dir_prefix):]
 
         # Add depends_on for broker health checks
-        svc["depends_on"] = {
+        existing_depends = svc.get("depends_on", {})
+        if not isinstance(existing_depends, dict):
+            existing_depends = {}
+        existing_depends.update({
             "kafka": {"condition": "service_healthy", "required": False},
             "mosquitto": {"condition": "service_healthy", "required": False},
-        }
+        })
+        svc["depends_on"] = existing_depends
 
     # --- Merge into single compose ---
     merged = {

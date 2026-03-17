@@ -101,7 +101,10 @@ func (c *Cargo) handleOpen(ctx context.Context, message map[string]interface{}) 
 		return nil, nil
 	}
 	c.setState(ctx, StateOpen)
-	return map[string]interface{}{"ok": true, "state": c.state}, nil
+	c.mu.RLock()
+	state := c.state
+	c.mu.RUnlock()
+	return map[string]interface{}{"ok": true, "state": state}, nil
 }
 
 func (c *Cargo) handleClose(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
@@ -109,7 +112,10 @@ func (c *Cargo) handleClose(ctx context.Context, message map[string]interface{})
 		return nil, nil
 	}
 	c.setState(ctx, StateClosed)
-	return map[string]interface{}{"ok": true, "state": c.state}, nil
+	c.mu.RLock()
+	state := c.state
+	c.mu.RUnlock()
+	return map[string]interface{}{"ok": true, "state": state}, nil
 }
 
 func (c *Cargo) handleGetState(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {

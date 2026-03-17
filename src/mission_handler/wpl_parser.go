@@ -41,15 +41,16 @@ func ParseWPL(wplContent string, missionID string) (map[string]interface{}, stri
 		if len(parts) < 12 {
 			return nil, "invalid_wpl_line_" + strconv.Itoa(i) + "_too_few_columns"
 		}
-		idx, _ := strconv.Atoi(strings.TrimSpace(parts[0]))
-		cmd, _ := strconv.Atoi(strings.TrimSpace(parts[3]))
+		idx, errIdx := strconv.Atoi(strings.TrimSpace(parts[0]))
+		cmd, errCmd := strconv.Atoi(strings.TrimSpace(parts[3]))
 		lat, errLat := strconv.ParseFloat(strings.TrimSpace(parts[8]), 64)
 		lon, errLon := strconv.ParseFloat(strings.TrimSpace(parts[9]), 64)
 		alt, errAlt := strconv.ParseFloat(strings.TrimSpace(parts[10]), 64)
-		if errLat != nil || errLon != nil || errAlt != nil {
+		if errIdx != nil || errCmd != nil || errLat != nil || errLon != nil || errAlt != nil {
 			return nil, "invalid_wpl_line_" + strconv.Itoa(i) + "_parse_error"
 		}
-		if idx == -1 {
+		currentFrame, _ := strconv.Atoi(strings.TrimSpace(parts[2]))
+		if idx == 0 && currentFrame == 0 {
 			home = map[string]interface{}{"lat": lat, "lon": lon, "alt_m": alt}
 			continue
 		}

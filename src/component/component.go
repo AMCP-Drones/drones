@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync/atomic"
 
 	"github.com/AMCP-Drones/drones/src/bus"
 	"github.com/AMCP-Drones/drones/src/sdk"
@@ -20,7 +21,7 @@ type BaseComponent struct {
 	Topic         string
 	Bus           bus.Bus
 	handlers      map[string]Handler
-	running       bool
+	running       uint32
 }
 
 // NewBaseComponent creates a base component. Call RegisterHandler for actions, then Start().
@@ -48,7 +49,7 @@ func (c *BaseComponent) RegisterHandler(action string, h Handler) {
 
 // Running returns whether the component is started and subscribed.
 func (c *BaseComponent) Running() bool {
-	return c.running
+	return atomic.LoadUint32(&c.running) == 1
 }
 
 // IsTrustedSender returns true if the message sender is the security monitor (or starts with the given prefix).
@@ -77,7 +78,7 @@ func (c *BaseComponent) handleGetStatus(_ context.Context, _ map[string]interfac
 		"component_id":   c.ComponentID,
 		"component_type": c.ComponentType,
 		"topic":          c.Topic,
-		"running":        c.running,
+		"running":        c.Running(),
 		"handlers":       actions,
 	}, nil
 }
@@ -131,7 +132,7 @@ func getString(m map[string]interface{}, key string) string {
 
 // Start subscribes to the component topic and starts the bus. Call after all RegisterHandler calls.
 func (c *BaseComponent) Start(ctx context.Context) error {
-	if c.running {
+	if atomic.LoadUint32(&c.running) == 1 {
 		return nil
 	}
 	handler := func(message map[string]interface{}) {
@@ -143,25 +144,32 @@ func (c *BaseComponent) Start(ctx context.Context) error {
 	if err := c.Bus.Start(ctx); err != nil {
 		return err
 	}
-	c.running = true
+	atomic.StoreUint32(&c.running, 1)
 	log.Printf("[%s] started, listening on topic %s", c.ComponentID, c.Topic)
 	return nil
 }
 
 // Stop unsubscribes and stops the bus.
 func (c *BaseComponent) Stop(ctx context.Context) error {
-	if !c.running {
+	if atomic.LoadUint32(&c.running) == 0 {
 		return nil
 	}
-	c.running = false
+	atomic.StoreUint32(&c.running, 0)
+	var firstErr error
 	if err := c.Bus.Unsubscribe(ctx, c.Topic); err != nil {
 		log.Printf("[%s] unsubscribe: %v", c.ComponentID, err)
+		if firstErr == nil {
+			firstErr = err
+		}
 	}
 	if err := c.Bus.Stop(ctx); err != nil {
 		log.Printf("[%s] bus stop: %v", c.ComponentID, err)
+		if firstErr == nil {
+			firstErr = err
+		}
 	}
 	log.Printf("[%s] stopped", c.ComponentID)
-	return nil
+	return firstErr
 }
 
 // Request sends a request to another topic and waits for response.

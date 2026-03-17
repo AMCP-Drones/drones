@@ -165,6 +165,20 @@ func (a *Autopilot) pollNavigationIfDue(ctx context.Context) {
 	}
 }
 
+func normalizeSteps(stepsRaw interface{}) []interface{} {
+	if steps, ok := stepsRaw.([]interface{}); ok {
+		return steps
+	}
+	if stepsMap, ok := stepsRaw.([]map[string]interface{}); ok {
+		result := make([]interface{}, len(stepsMap))
+		for i, s := range stepsMap {
+			result[i] = s
+		}
+		return result
+	}
+	return nil
+}
+
 func (a *Autopilot) handleMissionLoad(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	if !component.IsTrustedSender(message, "security_monitor") {
 		return nil, nil
@@ -180,7 +194,8 @@ func (a *Autopilot) handleMissionLoad(_ context.Context, message map[string]inte
 	a.mu.Lock()
 	a.mission = mission
 	a.currentStepIndex = 0
-	if steps, _ := mission["steps"].([]interface{}); len(steps) > 0 {
+	steps := normalizeSteps(mission["steps"])
+	if len(steps) > 0 {
 		a.currentStepIndex = 0
 	} else {
 		a.currentStepIndex = -1
@@ -221,6 +236,18 @@ func (a *Autopilot) handleCmd(_ context.Context, message map[string]interface{})
 		}
 	case "ABORT":
 		a.state = StateAborted
+		a.mu.Unlock()
+		// Safe actuator sequence: stop motors, close cargo
+		if a.lastNavState != nil {
+			lat := getFloat(a.lastNavState, "lat")
+			lon := getFloat(a.lastNavState, "lon")
+			alt := getFloat(a.lastNavState, "alt_m")
+			heading := getFloat(a.lastNavState, "heading_deg")
+			a.sendMotorsTarget(context.Background(), 0, 0, 0, alt, lat, lon, heading, false)
+		}
+		a.sendCargo(context.Background(), false)
+		a.logToJournal(context.Background(), "AUTOPILOT_ABORTED", map[string]interface{}{"old_state": oldState})
+		a.mu.Lock()
 	case "RESET":
 		a.mission = nil
 		a.currentStepIndex = 0
@@ -228,6 +255,15 @@ func (a *Autopilot) handleCmd(_ context.Context, message map[string]interface{})
 	case "EMERGENCY_STOP":
 		a.state = StateEmergencyStop
 		a.mu.Unlock()
+		// Safe actuator sequence: stop motors, close cargo
+		if a.lastNavState != nil {
+			lat := getFloat(a.lastNavState, "lat")
+			lon := getFloat(a.lastNavState, "lon")
+			alt := getFloat(a.lastNavState, "alt_m")
+			heading := getFloat(a.lastNavState, "heading_deg")
+			a.sendMotorsTarget(context.Background(), 0, 0, 0, alt, lat, lon, heading, false)
+		}
+		a.sendCargo(context.Background(), false)
 		a.logToJournal(context.Background(), "AUTOPILOT_EMERGENCY_STOP", map[string]interface{}{"old_state": oldState})
 		a.mu.Lock()
 	case "KOVER":

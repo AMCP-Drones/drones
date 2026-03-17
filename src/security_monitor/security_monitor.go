@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/AMCP-Drones/drones/src/bus"
 	"github.com/AMCP-Drones/drones/src/component"
@@ -24,6 +25,7 @@ type PolicyKey struct {
 // SecurityMonitor implements the policy gateway and isolation mode.
 type SecurityMonitor struct {
 	*component.BaseComponent
+	mu              sync.RWMutex
 	policies        map[PolicyKey]struct{}
 	policyAdmin     string
 	mode            string // NORMAL | ISOLATED
@@ -139,6 +141,8 @@ func (sm *SecurityMonitor) registerHandlers() {
 }
 
 func (sm *SecurityMonitor) allowed(sender, targetTopic, targetAction string) bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
 	_, ok := sm.policies[PolicyKey{Sender: sender, Topic: targetTopic, Action: targetAction}]
 	return ok
 }
@@ -238,7 +242,9 @@ func (sm *SecurityMonitor) handleSetPolicy(_ context.Context, message map[string
 		return map[string]interface{}{"updated": false, "error": "invalid_policy"}, nil
 	}
 	k := PolicyKey{Sender: s, Topic: t, Action: a}
+	sm.mu.Lock()
 	sm.policies[k] = struct{}{}
+	sm.mu.Unlock()
 	return map[string]interface{}{"updated": true, "policy": map[string]string{"sender": s, "topic": t, "action": a}}, nil
 }
 
@@ -258,8 +264,10 @@ func (sm *SecurityMonitor) handleRemovePolicy(_ context.Context, message map[str
 		return map[string]interface{}{"removed": false, "error": "invalid_policy"}, nil
 	}
 	k := PolicyKey{Sender: s, Topic: t, Action: a}
+	sm.mu.Lock()
 	_, existed := sm.policies[k]
 	delete(sm.policies, k)
+	sm.mu.Unlock()
 	return map[string]interface{}{"removed": existed, "policy": map[string]string{"sender": s, "topic": t, "action": a}}, nil
 }
 
@@ -268,16 +276,20 @@ func (sm *SecurityMonitor) handleClearPolicies(_ context.Context, message map[st
 	if !sm.canManagePolicies(sender) {
 		return map[string]interface{}{"cleared": false, "error": "forbidden"}, nil
 	}
+	sm.mu.Lock()
 	n := len(sm.policies)
 	sm.policies = make(map[PolicyKey]struct{})
+	sm.mu.Unlock()
 	return map[string]interface{}{"cleared": true, "removed_count": n}, nil
 }
 
 func (sm *SecurityMonitor) handleListPolicies(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
+	sm.mu.RLock()
 	list := make([]map[string]string, 0, len(sm.policies))
 	for k := range sm.policies {
 		list = append(list, map[string]string{"sender": k.Sender, "topic": k.Topic, "action": k.Action})
 	}
+	sm.mu.RUnlock()
 	return map[string]interface{}{
 		"policy_admin_sender": sm.policyAdmin,
 		"count":               len(list),
@@ -286,12 +298,14 @@ func (sm *SecurityMonitor) handleListPolicies(_ context.Context, _ map[string]in
 }
 
 func (sm *SecurityMonitor) loadEmergencyPolicies() {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 	sm.policies = map[PolicyKey]struct{}{
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "navigation"), Action: "get_state"}:              {},
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "motors"), Action: "LAND"}:                       {},
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "cargo"), Action: "CLOSE"}:                       {},
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "journal"), Action: "LOG_EVENT"}:                 {},
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "security_monitor"), Action: "isolation_status"}: {},
+		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "navigation"), Action: "get_state"}:              {},
+		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "motors"), Action: "LAND"}:                       {},
+		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "cargo"), Action: "CLOSE"}:                       {},
+		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "journal"), Action: "LOG_EVENT"}:                 {},
+		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "security_monitor"), Action: "isolation_status"}: {},
 	}
 	sm.mode = "ISOLATED"
 }
@@ -301,7 +315,7 @@ func (sm *SecurityMonitor) handleIsolationStart(ctx context.Context, message map
 	if sender == "" {
 		return map[string]interface{}{"activated": false, "error": "forbidden"}, nil
 	}
-	if !strings.HasPrefix(sender, "emergensy") && !sm.canManagePolicies(sender) {
+	if !strings.HasPrefix(sender, "emergency") && !sm.canManagePolicies(sender) {
 		return map[string]interface{}{"activated": false, "error": "forbidden"}, nil
 	}
 	sm.loadEmergencyPolicies()
@@ -325,5 +339,8 @@ func (sm *SecurityMonitor) logIsolationActivated(ctx context.Context) {
 }
 
 func (sm *SecurityMonitor) handleIsolationStatus(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
-	return map[string]interface{}{"mode": sm.mode}, nil
+	sm.mu.RLock()
+	mode := sm.mode
+	sm.mu.RUnlock()
+	return map[string]interface{}{"mode": mode}, nil
 }

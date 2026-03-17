@@ -2,7 +2,10 @@
 set -e
 
 ADMIN_USER="${ADMIN_USER:-admin}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
+if [ -z "$ADMIN_PASSWORD" ]; then
+  ADMIN_PASSWORD="$(head -c 16 /dev/urandom | base64 | tr -d '=+/' | head -c 24)"
+  echo "[mqtt-entrypoint] WARNING: ADMIN_PASSWORD not set, using auto-generated password" >&2
+fi
 
 rm -f /mosquitto/data/passwd /mosquitto/data/acl
 

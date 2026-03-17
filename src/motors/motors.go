@@ -98,9 +98,10 @@ func (m *Motors) handleSetTarget(ctx context.Context, message map[string]interfa
 	m.lastTarget = target
 	m.mode = ModeTRACKING
 	m.lastCmdTs = float64(time.Now().UnixNano()) / 1e9
+	mode := m.mode
 	m.mu.Unlock()
 	m.emitSITL(ctx, map[string]interface{}{"cmd": "SET_TARGET", "target": target})
-	return map[string]interface{}{"ok": true, "mode": m.mode}, nil
+	return map[string]interface{}{"ok": true, "mode": mode}, nil
 }
 
 func (m *Motors) handleLand(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
@@ -110,9 +111,10 @@ func (m *Motors) handleLand(ctx context.Context, message map[string]interface{})
 	m.mu.Lock()
 	m.mode = ModeLANDING
 	m.lastCmdTs = float64(time.Now().UnixNano()) / 1e9
+	mode := m.mode
 	m.mu.Unlock()
 	m.emitSITL(ctx, map[string]interface{}{"cmd": "LAND"})
-	return map[string]interface{}{"ok": true, "mode": m.mode}, nil
+	return map[string]interface{}{"ok": true, "mode": mode}, nil
 }
 
 func (m *Motors) handleGetState(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {

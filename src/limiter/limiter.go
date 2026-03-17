@@ -31,7 +31,7 @@ type Limiter struct {
 	journalTopic             string
 	navigationTopic          string
 	telemetryTopic           string
-	emergensyTopic           string
+	emergencyTopic           string
 	controlIntervalSec       float64
 	navPollIntervalSec       float64
 	telemetryPollIntervalSec float64
@@ -65,7 +65,7 @@ func New(cfg *config.Config, b bus.Bus) *Limiter {
 	journalTopic := config.TopicFor(systemName, "journal")
 	navTopic := config.TopicFor(systemName, "navigation")
 	telemetryTopic := config.TopicFor(systemName, "telemetry")
-	emergensyTopic := config.TopicFor(systemName, "emergensy")
+	emergencyTopic := config.TopicFor(systemName, "emergency")
 	controlInterval := 0.5
 	navPollInterval := 0.2
 	telemetryPollInterval := 0.5
@@ -96,7 +96,7 @@ func New(cfg *config.Config, b bus.Bus) *Limiter {
 		journalTopic:             journalTopic,
 		navigationTopic:          navTopic,
 		telemetryTopic:           telemetryTopic,
-		emergensyTopic:           emergensyTopic,
+		emergencyTopic:           emergencyTopic,
 		controlIntervalSec:       controlInterval,
 		navPollIntervalSec:       navPollInterval,
 		telemetryPollIntervalSec: telemetryPollInterval,
@@ -254,11 +254,27 @@ func getFloat(m map[string]interface{}, k string) float64 {
 	return 0
 }
 
+func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
+	const earthRadiusM = 6371000.0
+	dLat := (lat2 - lat1) * math.Pi / 180.0
+	dLon := (lon2 - lon1) * math.Pi / 180.0
+	lat1Rad := lat1 * math.Pi / 180.0
+	lat2Rad := lat2 * math.Pi / 180.0
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1Rad)*math.Cos(lat2Rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return earthRadiusM * c
+}
+
 func (l *Limiter) recalculate(ctx context.Context) {
-	l.mu.Lock()
+	l.mu.RLock()
 	mission := l.mission
 	nav := l.lastNav
-	l.mu.Unlock()
+	maxDistance := l.maxDistanceFromPathM
+	maxAlt := l.maxAltDeviationM
+	currentState := l.state
+	l.mu.RUnlock()
+
 	if mission == nil || nav == nil {
 		return
 	}
@@ -276,29 +292,28 @@ func (l *Limiter) recalculate(ctx context.Context) {
 	tLat := getFloat(target, "lat")
 	tLon := getFloat(target, "lon")
 	tAlt := getFloat(target, "alt_m")
-	dLat := lat - tLat
-	dLon := lon - tLon
-	distanceM := math.Sqrt(dLat*dLat+dLon*dLon) * 111000
+	distanceM := haversineDistance(lat, lon, tLat, tLon)
 	altDev := math.Abs(alt - tAlt)
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if distanceM > l.maxDistanceFromPathM || altDev > l.maxAltDeviationM {
-		if l.state != StateEmergency {
-			l.state = StateEmergency
-			l.mu.Unlock()
-			l.publishEmergency(ctx, distanceM, altDev)
-			l.mu.Lock()
-		}
-	} else if distanceM > 0.5*l.maxDistanceFromPathM || altDev > 0.5*l.maxAltDeviationM {
-		if l.state != StateWarning {
-			l.mu.Unlock()
-			l.logToJournal(ctx, "LIMITER_DEVIATION_WARNING", map[string]interface{}{"distance_m": distanceM, "alt_deviation_m": altDev})
-			l.mu.Lock()
-		}
-		l.state = StateWarning
+	var newState string
+	if distanceM > maxDistance || altDev > maxAlt {
+		newState = StateEmergency
+	} else if distanceM > 0.5*maxDistance || altDev > 0.5*maxAlt {
+		newState = StateWarning
 	} else {
-		l.state = StateNormal
+		newState = StateNormal
+	}
+
+	if newState != currentState {
+		l.mu.Lock()
+		l.state = newState
+		l.mu.Unlock()
+
+		if newState == StateEmergency {
+			l.publishEmergency(ctx, distanceM, altDev)
+		} else if newState == StateWarning {
+			l.logToJournal(ctx, "LIMITER_DEVIATION_WARNING", map[string]interface{}{"distance_m": distanceM, "alt_deviation_m": altDev})
+		}
 	}
 }
 
@@ -318,12 +333,12 @@ func (l *Limiter) publishEmergency(ctx context.Context, distanceM, altDev float6
 		"action": "proxy_publish",
 		"sender": l.ComponentID,
 		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": l.emergensyTopic, "action": "limiter_event"},
+			"target": map[string]interface{}{"topic": l.emergencyTopic, "action": "limiter_event"},
 			"data":   eventPayload,
 		},
 	}
 	if err := l.Bus.Publish(ctx, l.secMonitorTopic, msg); err != nil {
-		log.Printf("[%s] publish emergensy: %v", l.ComponentID, err)
+		log.Printf("[%s] publish emergency: %v", l.ComponentID, err)
 	}
 }
 
