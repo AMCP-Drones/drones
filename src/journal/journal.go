@@ -90,8 +90,8 @@ func (j *Journal) handleLogEvent(_ context.Context, message map[string]interface
 		log.Printf("[%s] failed to open journal: %v", j.ComponentID, err)
 		return map[string]interface{}{"ok": false, "error": "write_failed"}, nil
 	}
+	defer func() { _ = f.Close() }()
 	_, err = f.Write(line)
-	f.Close()
 	if err != nil {
 		log.Printf("[%s] failed to write journal: %v", j.ComponentID, err)
 		return map[string]interface{}{"ok": false, "error": "write_failed"}, nil

@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf("bus: %v", err)
 	}
 
-	comp := mission_handler.New(cfg, b)
+	comp := missionhandler.New(cfg, b)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

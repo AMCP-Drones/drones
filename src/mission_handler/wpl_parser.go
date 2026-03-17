@@ -1,5 +1,5 @@
-// Package mission_handler parses WPL mission format and validates delivery missions.
-package mission_handler
+// Package missionhandler parses WPL mission format and validates delivery missions.
+package missionhandler
 
 import (
 	"strconv"

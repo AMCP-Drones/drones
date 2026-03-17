@@ -15,6 +15,7 @@ import (
 	"github.com/AMCP-Drones/drones/src/config"
 )
 
+// Motors mode constants.
 const (
 	ModeIDLE     = "IDLE"
 	ModeTRACKING = "TRACKING"

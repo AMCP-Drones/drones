@@ -16,6 +16,7 @@ import (
 	"github.com/AMCP-Drones/drones/src/config"
 )
 
+// Limiter state constants.
 const (
 	StateNormal    = "NORMAL"
 	StateWarning   = "WARNING"

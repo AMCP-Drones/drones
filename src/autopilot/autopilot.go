@@ -16,6 +16,7 @@ import (
 	"github.com/AMCP-Drones/drones/src/config"
 )
 
+// Autopilot state constants.
 const (
 	StateIDLE          = "IDLE"
 	StateMissionLoaded = "MISSION_LOADED"
@@ -246,7 +247,7 @@ func (a *Autopilot) handleCmd(_ context.Context, message map[string]interface{})
 	return map[string]interface{}{"ok": true, "state": a.state}, nil
 }
 
-func (a *Autopilot) handleGetState(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (a *Autopilot) handleGetState(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	totalSteps := 0

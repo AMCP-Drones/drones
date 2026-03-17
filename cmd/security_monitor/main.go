@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf("bus: %v", err)
 	}
 
-	sm := security_monitor.New(cfg, b)
+	sm := securitymonitor.New(cfg, b)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

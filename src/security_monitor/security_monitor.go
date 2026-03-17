@@ -1,5 +1,5 @@
-// Package security_monitor implements the policy-based gateway: proxy_request, proxy_publish, and isolation.
-package security_monitor
+// Package securitymonitor implements the policy-based gateway: proxy_request, proxy_publish, and isolation.
+package securitymonitor
 
 import (
 	"context"
@@ -222,7 +222,7 @@ func (sm *SecurityMonitor) handleProxyPublish(ctx context.Context, message map[s
 	return map[string]interface{}{"published": true}, nil
 }
 
-func (sm *SecurityMonitor) handleSetPolicy(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (sm *SecurityMonitor) handleSetPolicy(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	sender, _ := message["sender"].(string)
 	if !sm.canManagePolicies(sender) {
 		return map[string]interface{}{"updated": false, "error": "forbidden"}, nil
@@ -242,7 +242,7 @@ func (sm *SecurityMonitor) handleSetPolicy(ctx context.Context, message map[stri
 	return map[string]interface{}{"updated": true, "policy": map[string]string{"sender": s, "topic": t, "action": a}}, nil
 }
 
-func (sm *SecurityMonitor) handleRemovePolicy(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (sm *SecurityMonitor) handleRemovePolicy(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	sender, _ := message["sender"].(string)
 	if !sm.canManagePolicies(sender) {
 		return map[string]interface{}{"removed": false, "error": "forbidden"}, nil
@@ -263,7 +263,7 @@ func (sm *SecurityMonitor) handleRemovePolicy(ctx context.Context, message map[s
 	return map[string]interface{}{"removed": existed, "policy": map[string]string{"sender": s, "topic": t, "action": a}}, nil
 }
 
-func (sm *SecurityMonitor) handleClearPolicies(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (sm *SecurityMonitor) handleClearPolicies(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	sender, _ := message["sender"].(string)
 	if !sm.canManagePolicies(sender) {
 		return map[string]interface{}{"cleared": false, "error": "forbidden"}, nil

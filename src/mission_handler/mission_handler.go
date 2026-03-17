@@ -1,5 +1,5 @@
-// Package mission_handler implements LOAD_MISSION (WPL/JSON), VALIDATE_ONLY, get_state; sends mission to autopilot via security_monitor, logs to journal.
-package mission_handler
+// Package missionhandler implements LOAD_MISSION (WPL/JSON), VALIDATE_ONLY, get_state; sends mission to autopilot via security_monitor, logs to journal.
+package missionhandler
 
 import (
 	"context"

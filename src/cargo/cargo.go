@@ -13,6 +13,7 @@ import (
 	"github.com/AMCP-Drones/drones/src/config"
 )
 
+// Cargo door state constants.
 const (
 	StateClosed = "CLOSED"
 	StateOpen   = "OPEN"
