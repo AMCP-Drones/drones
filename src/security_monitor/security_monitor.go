@@ -24,11 +24,11 @@ type PolicyKey struct {
 // SecurityMonitor implements the policy gateway and isolation mode.
 type SecurityMonitor struct {
 	*component.BaseComponent
-	policies       map[PolicyKey]struct{}
-	policyAdmin    string
-	mode           string // NORMAL | ISOLATED
-	systemName     string
-	journalTopic   string
+	policies        map[PolicyKey]struct{}
+	policyAdmin     string
+	mode            string // NORMAL | ISOLATED
+	systemName      string
+	journalTopic    string
 	proxyTimeoutSec float64
 }
 
@@ -55,17 +55,16 @@ func New(cfg *config.Config, b bus.Bus) *SecurityMonitor {
 	}
 	sm := &SecurityMonitor{
 		BaseComponent:   base,
-		policies:       parsePolicies(rawPolicies),
-		policyAdmin:    policyAdmin,
-		mode:           "NORMAL",
-		systemName:     systemName,
-		journalTopic:   config.TopicFor(systemName, "journal"),
+		policies:        parsePolicies(rawPolicies),
+		policyAdmin:     policyAdmin,
+		mode:            "NORMAL",
+		systemName:      systemName,
+		journalTopic:    config.TopicFor(systemName, "journal"),
 		proxyTimeoutSec: timeout,
 	}
 	sm.registerHandlers()
 	return sm
 }
-
 
 func parsePolicies(raw string) map[PolicyKey]struct{} {
 	out := make(map[PolicyKey]struct{})
@@ -281,17 +280,17 @@ func (sm *SecurityMonitor) handleListPolicies(_ context.Context, _ map[string]in
 	}
 	return map[string]interface{}{
 		"policy_admin_sender": sm.policyAdmin,
-		"count":                len(list),
-		"policies":             list,
+		"count":               len(list),
+		"policies":            list,
 	}, nil
 }
 
 func (sm *SecurityMonitor) loadEmergencyPolicies() {
 	sm.policies = map[PolicyKey]struct{}{
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "navigation"), Action: "get_state"}:   {},
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "motors"), Action: "LAND"}:         {},
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "cargo"), Action: "CLOSE"}:          {},
-		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "journal"), Action: "LOG_EVENT"}:     {},
+		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "navigation"), Action: "get_state"}:              {},
+		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "motors"), Action: "LAND"}:                       {},
+		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "cargo"), Action: "CLOSE"}:                       {},
+		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "journal"), Action: "LOG_EVENT"}:                 {},
 		{Sender: "emergensy", Topic: config.TopicFor(sm.systemName, "security_monitor"), Action: "isolation_status"}: {},
 	}
 	sm.mode = "ISOLATED"

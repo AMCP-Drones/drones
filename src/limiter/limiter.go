@@ -17,33 +17,33 @@ import (
 )
 
 const (
-	StateNormal   = "NORMAL"
-	StateWarning  = "WARNING"
+	StateNormal    = "NORMAL"
+	StateWarning   = "WARNING"
 	StateEmergency = "EMERGENCY"
 )
 
 // Limiter holds mission and last nav/telemetry; compares position to mission and triggers emergensy on breach.
 type Limiter struct {
 	*component.BaseComponent
-	systemName           string
-	secMonitorTopic      string
-	journalTopic         string
-	navigationTopic      string
-	telemetryTopic       string
-	emergensyTopic       string
-	controlIntervalSec   float64
-	navPollIntervalSec   float64
+	systemName               string
+	secMonitorTopic          string
+	journalTopic             string
+	navigationTopic          string
+	telemetryTopic           string
+	emergensyTopic           string
+	controlIntervalSec       float64
+	navPollIntervalSec       float64
 	telemetryPollIntervalSec float64
-	requestTimeoutSec    float64
-	maxDistanceFromPathM float64
-	maxAltDeviationM     float64
-	mu                   sync.RWMutex
-	mission              map[string]interface{}
-	lastNav              map[string]interface{}
-	lastTelemetry        map[string]interface{}
-	state                string
-	lastNavPollTs        float64
-	lastTelemetryPollTs  float64
+	requestTimeoutSec        float64
+	maxDistanceFromPathM     float64
+	maxAltDeviationM         float64
+	mu                       sync.RWMutex
+	mission                  map[string]interface{}
+	lastNav                  map[string]interface{}
+	lastTelemetry            map[string]interface{}
+	state                    string
+	lastNavPollTs            float64
+	lastTelemetryPollTs      float64
 }
 
 // New creates a Limiter. Call Start after creation.
@@ -71,7 +71,10 @@ func New(cfg *config.Config, b bus.Bus) *Limiter {
 	requestTimeout := 5.0
 	maxDist := 50.0
 	maxAlt := 20.0
-	for _, p := range []struct{ env string; v *float64 }{
+	for _, p := range []struct {
+		env string
+		v   *float64
+	}{
 		{"LIMITER_CONTROL_INTERVAL_S", &controlInterval},
 		{"LIMITER_NAV_POLL_INTERVAL_S", &navPollInterval},
 		{"LIMITER_TELEMETRY_POLL_INTERVAL_S", &telemetryPollInterval},
@@ -86,22 +89,22 @@ func New(cfg *config.Config, b bus.Bus) *Limiter {
 		}
 	}
 	l := &Limiter{
-		BaseComponent:        base,
-		systemName:           systemName,
-		secMonitorTopic:      secTopic,
-		journalTopic:         journalTopic,
-		navigationTopic:      navTopic,
-		telemetryTopic:       telemetryTopic,
-		emergensyTopic:       emergensyTopic,
-		controlIntervalSec:   controlInterval,
-		navPollIntervalSec:   navPollInterval,
+		BaseComponent:            base,
+		systemName:               systemName,
+		secMonitorTopic:          secTopic,
+		journalTopic:             journalTopic,
+		navigationTopic:          navTopic,
+		telemetryTopic:           telemetryTopic,
+		emergensyTopic:           emergensyTopic,
+		controlIntervalSec:       controlInterval,
+		navPollIntervalSec:       navPollInterval,
 		telemetryPollIntervalSec: telemetryPollInterval,
-		requestTimeoutSec:    requestTimeout,
-		maxDistanceFromPathM: maxDist,
-		maxAltDeviationM:     maxAlt,
-		state:                StateNormal,
-		lastNavPollTs:        0,
-		lastTelemetryPollTs:  0,
+		requestTimeoutSec:        requestTimeout,
+		maxDistanceFromPathM:     maxDist,
+		maxAltDeviationM:         maxAlt,
+		state:                    StateNormal,
+		lastNavPollTs:            0,
+		lastTelemetryPollTs:      0,
 	}
 	l.registerHandlers()
 	return l
@@ -220,9 +223,9 @@ func (l *Limiter) handleUpdateConfig(_ context.Context, message map[string]inter
 	}
 	l.mu.Unlock()
 	return map[string]interface{}{
-		"ok":                         true,
-		"max_distance_from_path_m":  l.maxDistanceFromPathM,
-		"max_alt_deviation_m":       l.maxAltDeviationM,
+		"ok":                       true,
+		"max_distance_from_path_m": l.maxDistanceFromPathM,
+		"max_alt_deviation_m":      l.maxAltDeviationM,
 	}, nil
 }
 
@@ -300,10 +303,10 @@ func (l *Limiter) recalculate(ctx context.Context) {
 
 func (l *Limiter) publishEmergency(ctx context.Context, distanceM, altDev float64) {
 	details := map[string]interface{}{
-		"distance_from_path_m":   distanceM,
+		"distance_from_path_m":     distanceM,
 		"max_distance_from_path_m": l.maxDistanceFromPathM,
-		"alt_deviation_m":        altDev,
-		"max_alt_deviation_m":    l.maxAltDeviationM,
+		"alt_deviation_m":          altDev,
+		"max_alt_deviation_m":      l.maxAltDeviationM,
 	}
 	l.logToJournal(ctx, "LIMITER_EMERGENCY_LAND_REQUIRED", details)
 	eventPayload := map[string]interface{}{

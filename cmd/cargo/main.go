@@ -9,8 +9,8 @@ import (
 	"syscall"
 
 	"github.com/AMCP-Drones/drones/src/bus"
-	"github.com/AMCP-Drones/drones/src/config"
 	"github.com/AMCP-Drones/drones/src/cargo"
+	"github.com/AMCP-Drones/drones/src/config"
 )
 
 func main() {

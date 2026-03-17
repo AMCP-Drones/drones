@@ -62,12 +62,12 @@ func New(cfg *config.Config, b bus.Bus) *Motors {
 	m := &Motors{
 		BaseComponent: base,
 		systemName:    systemName,
-		sitlTopic:    sitlTopic,
-		sitlMode:     sitlMode,
-		mode:         ModeIDLE,
-		lastTarget:   nil,
-		lastCmdTs:    0,
-		tempC:        tempC,
+		sitlTopic:     sitlTopic,
+		sitlMode:      sitlMode,
+		mode:          ModeIDLE,
+		lastTarget:    nil,
+		lastCmdTs:     0,
+		tempC:         tempC,
 	}
 	m.registerHandlers()
 	return m
@@ -129,8 +129,8 @@ func (m *Motors) handleGetState(_ context.Context, _ map[string]interface{}) (ma
 
 func (m *Motors) emitSITL(ctx context.Context, command map[string]interface{}) {
 	msg := map[string]interface{}{
-		"source":   "motors",
-		"command":  command,
+		"source":  "motors",
+		"command": command,
 	}
 	if m.sitlMode != "mock" {
 		msg["note"] = "sitl_mode=" + m.sitlMode + " not implemented, emitted as mock"

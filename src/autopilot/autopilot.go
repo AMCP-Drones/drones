@@ -17,35 +17,35 @@ import (
 )
 
 const (
-	StateIDLE           = "IDLE"
-	StateMissionLoaded   = "MISSION_LOADED"
-	StateExecuting       = "EXECUTING"
-	StatePaused          = "PAUSED"
-	StateCompleted       = "COMPLETED"
-	StateAborted         = "ABORTED"
-	StateEmergencyStop   = "EMERGENCY_STOP"
+	StateIDLE          = "IDLE"
+	StateMissionLoaded = "MISSION_LOADED"
+	StateExecuting     = "EXECUTING"
+	StatePaused        = "PAUSED"
+	StateCompleted     = "COMPLETED"
+	StateAborted       = "ABORTED"
+	StateEmergencyStop = "EMERGENCY_STOP"
 )
 
 // Autopilot runs the mission control loop and commands motors and cargo.
 type Autopilot struct {
 	*component.BaseComponent
-	systemName          string
-	secMonitorTopic     string
-	journalTopic        string
-	navigationTopic     string
-	motorsTopic         string
-	cargoTopic          string
-	controlIntervalSec  float64
-	navPollIntervalSec  float64
-	requestTimeoutSec   float64
-	mu                  sync.RWMutex
-	mission             map[string]interface{}
-	state               string
-	currentStepIndex    int
-	lastNavState        map[string]interface{}
-	cargoState          string
-	koverActive         bool
-	lastNavPollTs       float64
+	systemName         string
+	secMonitorTopic    string
+	journalTopic       string
+	navigationTopic    string
+	motorsTopic        string
+	cargoTopic         string
+	controlIntervalSec float64
+	navPollIntervalSec float64
+	requestTimeoutSec  float64
+	mu                 sync.RWMutex
+	mission            map[string]interface{}
+	state              string
+	currentStepIndex   int
+	lastNavState       map[string]interface{}
+	cargoState         string
+	koverActive        bool
+	lastNavPollTs      float64
 }
 
 // New creates an Autopilot. Call Start after creation.
@@ -70,7 +70,10 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 	controlInterval := 0.2
 	navPollInterval := 0.1
 	requestTimeout := 5.0
-	for _, pair := range []struct{ env string; v *float64 }{
+	for _, pair := range []struct {
+		env string
+		v   *float64
+	}{
 		{"AUTOPILOT_CONTROL_INTERVAL_S", &controlInterval},
 		{"AUTOPILOT_NAV_POLL_INTERVAL_S", &navPollInterval},
 		{"AUTOPILOT_REQUEST_TIMEOUT_S", &requestTimeout},
@@ -82,7 +85,7 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 		}
 	}
 	a := &Autopilot{
-		BaseComponent:     base,
+		BaseComponent:      base,
 		systemName:         systemName,
 		secMonitorTopic:    secTopic,
 		journalTopic:       journalTopic,

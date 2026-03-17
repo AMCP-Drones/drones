@@ -21,12 +21,12 @@ const (
 // Cargo implements the cargo bay. OPEN/CLOSE only from security_monitor; get_state for telemetry.
 type Cargo struct {
 	*component.BaseComponent
-	systemName         string
+	systemName           string
 	securityMonitorTopic string
-	journalTopic       string
-	mu                 sync.RWMutex
-	state              string
-	lastChangeTs       float64
+	journalTopic         string
+	mu                   sync.RWMutex
+	state                string
+	lastChangeTs         float64
 }
 
 // New creates a Cargo component. Call Start after creation.
@@ -46,12 +46,12 @@ func New(cfg *config.Config, b bus.Bus) *Cargo {
 	}
 	journalTopic := config.TopicFor(systemName, "journal")
 	c := &Cargo{
-		BaseComponent:       base,
-		systemName:          systemName,
+		BaseComponent:        base,
+		systemName:           systemName,
 		securityMonitorTopic: secTopic,
-		journalTopic:        journalTopic,
-		state:               StateClosed,
-		lastChangeTs:        float64(time.Now().UnixNano()) / 1e9,
+		journalTopic:         journalTopic,
+		state:                StateClosed,
+		lastChangeTs:         float64(time.Now().UnixNano()) / 1e9,
 	}
 	c.registerHandlers()
 	return c

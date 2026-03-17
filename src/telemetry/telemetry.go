@@ -18,16 +18,16 @@ import (
 // Telemetry aggregates motors and cargo state; get_state only from security_monitor.
 type Telemetry struct {
 	*component.BaseComponent
-	systemName       string
-	secMonitorTopic  string
-	motorsTopic      string
-	cargoTopic       string
-	pollIntervalSec  float64
+	systemName        string
+	secMonitorTopic   string
+	motorsTopic       string
+	cargoTopic        string
+	pollIntervalSec   float64
 	requestTimeoutSec float64
-	mu               sync.RWMutex
-	lastMotors       map[string]interface{}
-	lastCargo        map[string]interface{}
-	lastPollTs       float64
+	mu                sync.RWMutex
+	lastMotors        map[string]interface{}
+	lastCargo         map[string]interface{}
+	lastPollTs        float64
 }
 
 // New creates a Telemetry component. Call Start after creation.

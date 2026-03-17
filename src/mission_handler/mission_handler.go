@@ -16,14 +16,14 @@ import (
 // MissionHandler accepts WPL or JSON missions, validates, sends to autopilot, logs events.
 type MissionHandler struct {
 	*component.BaseComponent
-	systemName           string
-	secMonitorTopic      string
-	autopilotTopic       string
-	journalTopic         string
-	limiterTopic         string
-	requestTimeoutSec    float64
-	lastMission          map[string]interface{}
-	lastError            string
+	systemName        string
+	secMonitorTopic   string
+	autopilotTopic    string
+	journalTopic      string
+	limiterTopic      string
+	requestTimeoutSec float64
+	lastMission       map[string]interface{}
+	lastError         string
 }
 
 // New creates a MissionHandler. Call Start after creation.
@@ -54,15 +54,15 @@ func New(cfg *config.Config, b bus.Bus) *MissionHandler {
 		}
 	}
 	m := &MissionHandler{
-		BaseComponent:    base,
-		systemName:       systemName,
+		BaseComponent:     base,
+		systemName:        systemName,
 		secMonitorTopic:   secTopic,
 		autopilotTopic:    autopilotTopic,
 		journalTopic:      journalTopic,
 		limiterTopic:      limiterTopic,
 		requestTimeoutSec: timeout,
-		lastMission:      nil,
-		lastError:        "",
+		lastMission:       nil,
+		lastError:         "",
 	}
 	m.registerHandlers()
 	return m

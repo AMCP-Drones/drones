@@ -57,12 +57,12 @@ func ParseWPL(wplContent string, missionID string) (map[string]interface{}, stri
 			continue
 		}
 		step := map[string]interface{}{
-			"id":         "wp-" + pad3(len(steps)),
-			"lat":        lat,
-			"lon":        lon,
-			"alt_m":      alt,
-			"speed_mps":  5.0,
-			"drop":       false,
+			"id":        "wp-" + pad3(len(steps)),
+			"lat":       lat,
+			"lon":       lon,
+			"alt_m":     alt,
+			"speed_mps": 5.0,
+			"drop":      false,
 		}
 		steps = append(steps, step)
 	}

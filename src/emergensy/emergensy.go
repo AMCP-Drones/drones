@@ -14,12 +14,12 @@ import (
 // Emergensy handles limiter_event (EMERGENCY_LAND_REQUIRED): isolation, cargo close, motors LAND, journal.
 type Emergensy struct {
 	*component.BaseComponent
-	systemName       string
-	secMonitorTopic  string
-	journalTopic     string
-	motorsTopic      string
-	cargoTopic       string
-	active           bool
+	systemName      string
+	secMonitorTopic string
+	journalTopic    string
+	motorsTopic     string
+	cargoTopic      string
+	active          bool
 }
 
 // New creates an Emergensy component. Call Start after creation.
