@@ -1,13 +1,12 @@
 FROM golang:1.21-alpine AS build
 WORKDIR /app
 COPY . .
-RUN go build -mod=vendor -o /stub_component ./cmd/stub_component
+RUN go build -mod=vendor -o /security_monitor ./cmd/security_monitor
 
 FROM alpine:3.19
 RUN apk --no-cache add ca-certificates && \
     addgroup -g 1000 appgroup && \
     adduser -D -u 1000 -G appgroup appuser
-COPY --from=build --chown=appuser:appgroup /stub_component /stub_component
-ENV COMPONENT_TYPE=security_monitor
+COPY --from=build --chown=appuser:appgroup /security_monitor /security_monitor
 USER appuser
-CMD ["/stub_component"]
+CMD ["/security_monitor"]

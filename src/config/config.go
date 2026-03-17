@@ -105,3 +105,12 @@ func FromEnv() *Config {
 		MQTTQoS:        mqttQoS,
 	}
 }
+
+// TopicFor returns the broker topic for a component: systemName.componentName.
+// Used by deliverydron components for security_monitor, journal, etc.
+func TopicFor(systemName, componentName string) string {
+	if systemName == "" {
+		systemName = "deliverydron"
+	}
+	return systemName + "." + componentName
+}

@@ -7,18 +7,18 @@ Multi-component delivery drone system (same structure as agro in `cyber_drons`),
 | Component         | Role                          | Implementation        |
 |------------------|-------------------------------|------------------------|
 | delivery_drone   | Main delivery logic, health   | Full (cmd/delivery_drone) |
-| security_monitor | Policy / proxy (placeholder)  | Stub                   |
-| journal          | Event log (placeholder)       | Stub                   |
-| navigation       | Nav state (placeholder)      | Stub                   |
-| mission_handler  | Delivery missions (placeholder) | Stub                |
-| autopilot        | Control (placeholder)         | Stub                   |
-| limiter          | Geofence (placeholder)       | Stub                   |
-| emergensy        | Emergency (placeholder)      | Stub                   |
-| motors           | Motors/SITL (placeholder)    | Stub                   |
-| cargo            | Cargo bay (placeholder)      | Stub                   |
-| telemetry        | Telemetry (placeholder)      | Stub                   |
+| security_monitor | Policy gateway, proxy_request/proxy_publish, isolation | Full (cmd/security_monitor) |
+| journal          | Append-only event log (LOG_EVENT, NDJSON) | Full (cmd/journal) |
+| navigation       | Nav state (mock/SITL), get_state | Full (cmd/navigation) |
+| mission_handler  | WPL/JSON missions, validate, send to autopilot | Full (cmd/mission_handler) |
+| autopilot        | Control loop, motors + cargo  | Full (cmd/autopilot)   |
+| limiter          | Geofence, limiter_event to emergensy | Full (cmd/limiter) |
+| emergensy        | Emergency protocol (isolation, LAND, cargo close) | Full (cmd/emergensy) |
+| motors           | SET_TARGET, LAND, get_state, SITL commands | Full (cmd/motors) |
+| cargo            | OPEN/CLOSE, get_state         | Full (cmd/cargo)      |
+| telemetry        | Aggregate motors + cargo state | Full (cmd/telemetry)  |
 
-Stub components run a minimal broker subscriber (ping/get_status only) so the system composes and can be extended later.
+All components use the shared bus (Kafka or MQTT) and follow the same patterns as the agrodron system (security_monitor policies, proxy_request/proxy_publish, journal LOG_EVENT).
 
 ## Quick start
 
