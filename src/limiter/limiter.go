@@ -1,4 +1,4 @@
-// Package limiter implements the geofence component: mission_load, update_config, get_state; polls nav and telemetry, publishes limiter_event to emergensy and LOG_EVENT to journal on deviation.
+// Package limiter implements the geofence component: mission_load, update_config, get_state; polls nav and telemetry, publishes limiter_event to emergency and LOG_EVENT to journal on deviation.
 package limiter
 
 import (
@@ -23,7 +23,7 @@ const (
 	StateEmergency = "EMERGENCY"
 )
 
-// Limiter holds mission and last nav/telemetry; compares position to mission and triggers emergensy on breach.
+// Limiter holds mission and last nav/telemetry; compares position to mission and triggers emergency on breach.
 type Limiter struct {
 	*component.BaseComponent
 	systemName               string

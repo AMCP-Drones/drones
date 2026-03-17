@@ -1,4 +1,4 @@
-// Binary for the deliverydron limiter component (geofence, emergensy + journal).
+// Binary for the deliverydron limiter component (geofence, emergency + journal).
 package main
 
 import (

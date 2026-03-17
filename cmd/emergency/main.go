@@ -10,7 +10,7 @@ import (
 
 	"github.com/AMCP-Drones/drones/src/bus"
 	"github.com/AMCP-Drones/drones/src/config"
-	"github.com/AMCP-Drones/drones/src/emergensy"
+	"github.com/AMCP-Drones/drones/src/emergency"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf("bus: %v", err)
 	}
 
-	comp := emergensy.New(cfg, b)
+	comp := emergency.New(cfg, b)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

@@ -12,7 +12,7 @@ Multi-component delivery drone system (same structure as agro in `cyber_drons`),
 | navigation       | Nav state (mock/SITL), get_state | Full (cmd/navigation) |
 | mission_handler  | WPL/JSON missions, validate, send to autopilot | Full (cmd/mission_handler) |
 | autopilot        | Control loop, motors + cargo  | Full (cmd/autopilot)   |
-| limiter          | Geofence, limiter_event to emergensy | Full (cmd/limiter) |
+| limiter          | Geofence, limiter_event to emergency | Full (cmd/limiter) |
 | emergency        | Emergency protocol (isolation, LAND, cargo close) | Full (cmd/emergency) |
 | motors           | SET_TARGET, LAND, get_state, SITL commands | Full (cmd/motors) |
 | cargo            | OPEN/CLOSE, get_state         | Full (cmd/cargo)      |
