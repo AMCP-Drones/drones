@@ -1,4 +1,4 @@
-.PHONY: build test unit-test docker-build docker-up run vendor deps init prepare system-up system-down build-all
+.PHONY: build test unit-test test-e2e docker-build docker-up run vendor deps init prepare system-up system-down build-all
 
 BINARY := delivery-drone
 DOCKER_IMAGE := delivery_drone
@@ -34,7 +34,11 @@ vendor:
 test: unit-test
 
 unit-test:
-	GOPROXY=DIRECT CGO_ENABLED=0 go test ./... -v
+	GOPROXY=DIRECT CGO_ENABLED=0 go test ./... -v -cover
+
+# Real broker: E2E_KAFKA=1 KAFKA_BOOTSTRAP_SERVERS=host:port BROKER_USER=... BROKER_PASSWORD=...
+test-e2e:
+	GOPROXY=DIRECT CGO_ENABLED=0 go test -tags=e2e ./tests/e2e/... -v
 
 # Requires vendored deps: run 'make vendor' first if vendor/ is missing.
 # Prefer buildx (BuildKit) to avoid "legacy builder deprecated" warning; falls back to docker build.

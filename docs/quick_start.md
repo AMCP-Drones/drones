@@ -53,6 +53,8 @@ make unit-test
 go test ./...
 ```
 
+Layered tests (unit / module / integration) and optional Kafka e2e: see [tests/README.md](../tests/README.md).
+
 ## Documentation
 
 - [SYSTEM.md](SYSTEM.md) — architecture, topics, components, security monitor, policies

@@ -24,10 +24,6 @@ type Journal struct {
 
 // New creates a Journal. Call Start after creation.
 func New(cfg *config.Config, b bus.Bus) *Journal {
-	systemName := cfg.SystemName
-	if systemName == "" {
-		systemName = "deliverydron"
-	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
 		topic = cfg.BrokerTopicFor("journal")
