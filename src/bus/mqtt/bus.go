@@ -1,3 +1,4 @@
+// Package mqtt implements the bus.Bus interface using MQTT (e.g. Eclipse Mosquitto).
 package mqtt
 
 import (
@@ -59,7 +60,7 @@ func (b *Bus) mqttToTopic(mqttTopic string) string {
 	return strings.ReplaceAll(mqttTopic, "/", ".")
 }
 
-func (b *Bus) getClient(ctx context.Context) (mqtt.Client, error) {
+func (b *Bus) getClient(_ context.Context) (mqtt.Client, error) {
 	if b.client != nil && b.client.IsConnected() {
 		return b.client, nil
 	}
@@ -72,7 +73,7 @@ func (b *Bus) getClient(ctx context.Context) (mqtt.Client, error) {
 	}
 	opts.SetAutoReconnect(true)
 	opts.SetConnectRetry(true)
-	opts.SetDefaultPublishHandler(func(client mqtt.Client, msg mqtt.Message) {
+	opts.SetDefaultPublishHandler(func(_ mqtt.Client, msg mqtt.Message) {
 		topic := b.mqttToTopic(msg.Topic())
 		var m map[string]interface{}
 		if err := json.Unmarshal(msg.Payload(), &m); err != nil {
@@ -110,6 +111,7 @@ func (b *Bus) getClient(ctx context.Context) (mqtt.Client, error) {
 	return client, nil
 }
 
+// Start connects to the MQTT broker and subscribes to reply and handler topics.
 func (b *Bus) Start(ctx context.Context) error {
 	if b.running {
 		return nil
@@ -136,7 +138,8 @@ func (b *Bus) Start(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bus) Stop(ctx context.Context) error {
+// Stop disconnects the MQTT client and releases resources.
+func (b *Bus) Stop(_ context.Context) error {
 	if !b.running {
 		return nil
 	}
@@ -148,6 +151,7 @@ func (b *Bus) Stop(ctx context.Context) error {
 	return nil
 }
 
+// Publish sends a JSON message to the given topic.
 func (b *Bus) Publish(ctx context.Context, topic string, message map[string]interface{}) error {
 	cli, err := b.getClient(ctx)
 	if err != nil {
@@ -165,7 +169,8 @@ func (b *Bus) Publish(ctx context.Context, topic string, message map[string]inte
 	return token.Error()
 }
 
-func (b *Bus) Subscribe(ctx context.Context, topic string, handler func(map[string]interface{})) error {
+// Subscribe registers a handler for the topic.
+func (b *Bus) Subscribe(_ context.Context, topic string, handler func(map[string]interface{})) error {
 	b.handlersMu.Lock()
 	b.handlers[topic] = handler
 	b.handlersMu.Unlock()
@@ -176,7 +181,8 @@ func (b *Bus) Subscribe(ctx context.Context, topic string, handler func(map[stri
 	return nil
 }
 
-func (b *Bus) Unsubscribe(ctx context.Context, topic string) error {
+// Unsubscribe removes the handler for the topic.
+func (b *Bus) Unsubscribe(_ context.Context, topic string) error {
 	b.handlersMu.Lock()
 	delete(b.handlers, topic)
 	b.handlersMu.Unlock()
@@ -187,6 +193,7 @@ func (b *Bus) Unsubscribe(ctx context.Context, topic string) error {
 	return nil
 }
 
+// Request publishes a message with correlation_id and reply_to, then waits for a response or timeout.
 func (b *Bus) Request(ctx context.Context, topic string, message map[string]interface{}, timeoutSec float64) (map[string]interface{}, error) {
 	if !b.running {
 		if err := b.Start(ctx); err != nil {

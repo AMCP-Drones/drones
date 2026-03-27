@@ -24,7 +24,7 @@ func main() {
 		log.Fatalf("bus: %v", err)
 	}
 
-	drone := delivery.New(cfg.ComponentID, cfg.ComponentID, "components.delivery_drone", b)
+	drone := delivery.New(cfg.ComponentID, cfg.ComponentID, cfg.ComponentTopic, b)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -36,7 +36,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			log.Printf("health write: %v", err)
+		}
 	})
 	addr := ":" + cfg.HealthPort
 	srv := &http.Server{Addr: addr, Handler: mux}
@@ -52,7 +54,12 @@ func main() {
 	<-sig
 	log.Printf("[%s] shutting down", cfg.ComponentID)
 	cancel()
-	_ = drone.Stop(context.Background())
-	shutdownCtx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = srv.Shutdown(shutdownCtx)
+	if err := drone.Stop(context.Background()); err != nil {
+		log.Printf("drone stop: %v", err)
+	}
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("health server shutdown: %v", err)
+	}
 }
