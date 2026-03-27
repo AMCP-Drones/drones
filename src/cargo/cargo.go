@@ -38,14 +38,14 @@ func New(cfg *config.Config, b bus.Bus) *Cargo {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "cargo")
+		topic = cfg.BrokerTopicFor("cargo")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "cargo", topic, b)
 	secTopic := os.Getenv("SECURITY_MONITOR_TOPIC")
 	if secTopic == "" {
-		secTopic = config.TopicFor(systemName, "security_monitor")
+		secTopic = cfg.BrokerTopicFor("security_monitor")
 	}
-	journalTopic := config.TopicFor(systemName, "journal")
+	journalTopic := cfg.BrokerTopicFor("journal")
 	c := &Cargo{
 		BaseComponent:        base,
 		systemName:           systemName,

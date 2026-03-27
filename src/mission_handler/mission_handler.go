@@ -36,19 +36,19 @@ func New(cfg *config.Config, b bus.Bus) *MissionHandler {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "mission_handler")
+		topic = cfg.BrokerTopicFor("mission_handler")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "mission_handler", topic, b)
 	secTopic := os.Getenv("SECURITY_MONITOR_TOPIC")
 	if secTopic == "" {
-		secTopic = config.TopicFor(systemName, "security_monitor")
+		secTopic = cfg.BrokerTopicFor("security_monitor")
 	}
 	autopilotTopic := os.Getenv("AUTOPILOT_TOPIC")
 	if autopilotTopic == "" {
-		autopilotTopic = config.TopicFor(systemName, "autopilot")
+		autopilotTopic = cfg.BrokerTopicFor("autopilot")
 	}
-	journalTopic := config.TopicFor(systemName, "journal")
-	limiterTopic := config.TopicFor(systemName, "limiter")
+	journalTopic := cfg.BrokerTopicFor("journal")
+	limiterTopic := cfg.BrokerTopicFor("limiter")
 	timeout := 10.0
 	if s := os.Getenv("MISSION_HANDLER_REQUEST_TIMEOUT_S"); s != "" {
 		if v, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil && v > 0 {

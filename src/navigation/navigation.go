@@ -39,7 +39,7 @@ func New(cfg *config.Config, b bus.Bus) *Navigation {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "navigation")
+		topic = cfg.BrokerTopicFor("navigation")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "navigation", topic, b)
 	// Start with a copy of default mock state

@@ -43,12 +43,13 @@ func New(cfg *config.Config, b bus.Bus) *Motors {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "motors")
+		topic = cfg.BrokerTopicFor("motors")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "motors", topic, b)
-	sitlTopic := os.Getenv("SITL_COMMANDS_TOPIC")
+	sitlTopic := strings.TrimSpace(os.Getenv("SITL_COMMANDS_TOPIC"))
 	if sitlTopic == "" {
-		sitlTopic = config.TopicFor(systemName, "sitl.commands")
+		// Flat simulator command topic (common for SITL-style bridges)
+		sitlTopic = "sitl.commands"
 	}
 	sitlMode := strings.TrimSpace(strings.ToLower(os.Getenv("SITL_MODE")))
 	if sitlMode == "" {

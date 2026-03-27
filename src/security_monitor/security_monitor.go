@@ -25,6 +25,7 @@ type PolicyKey struct {
 // SecurityMonitor implements the policy gateway and isolation mode.
 type SecurityMonitor struct {
 	*component.BaseComponent
+	cfg             *config.Config
 	mu              sync.RWMutex
 	policies        map[PolicyKey]struct{}
 	policyAdmin     string
@@ -42,12 +43,14 @@ func New(cfg *config.Config, b bus.Bus) *SecurityMonitor {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "security_monitor")
+		topic = cfg.BrokerTopicFor("security_monitor")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "security_monitor", topic, b)
+	topicPrefix := cfg.TopicPrefix()
 	rawPolicies := os.Getenv("SECURITY_POLICIES")
-	rawPolicies = strings.ReplaceAll(rawPolicies, "${SYSTEM_NAME}", systemName)
-	rawPolicies = strings.ReplaceAll(rawPolicies, "$SYSTEM_NAME", systemName)
+	rawPolicies = strings.ReplaceAll(rawPolicies, "${TOPIC_PREFIX}", topicPrefix)
+	rawPolicies = strings.ReplaceAll(rawPolicies, "${SYSTEM_NAME}", topicPrefix)
+	rawPolicies = strings.ReplaceAll(rawPolicies, "$SYSTEM_NAME", topicPrefix)
 	policyAdmin := strings.TrimSpace(os.Getenv("POLICY_ADMIN_SENDER"))
 	timeout := 10.0
 	if t := os.Getenv("SECURITY_MONITOR_PROXY_REQUEST_TIMEOUT_S"); t != "" {
@@ -57,11 +60,12 @@ func New(cfg *config.Config, b bus.Bus) *SecurityMonitor {
 	}
 	sm := &SecurityMonitor{
 		BaseComponent:   base,
+		cfg:             cfg,
 		policies:        parsePolicies(rawPolicies),
 		policyAdmin:     policyAdmin,
 		mode:            "NORMAL",
 		systemName:      systemName,
-		journalTopic:    config.TopicFor(systemName, "journal"),
+		journalTopic:    cfg.BrokerTopicFor("journal"),
 		proxyTimeoutSec: timeout,
 	}
 	sm.registerHandlers()
@@ -300,12 +304,13 @@ func (sm *SecurityMonitor) handleListPolicies(_ context.Context, _ map[string]in
 func (sm *SecurityMonitor) loadEmergencyPolicies() {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+	cfg := sm.cfg
 	sm.policies = map[PolicyKey]struct{}{
-		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "navigation"), Action: "get_state"}:              {},
-		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "motors"), Action: "LAND"}:                       {},
-		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "cargo"), Action: "CLOSE"}:                       {},
-		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "journal"), Action: "LOG_EVENT"}:                 {},
-		{Sender: "emergency", Topic: config.TopicFor(sm.systemName, "security_monitor"), Action: "isolation_status"}: {},
+		{Sender: "emergency", Topic: cfg.BrokerTopicFor("navigation"), Action: "get_state"}:              {},
+		{Sender: "emergency", Topic: cfg.BrokerTopicFor("motors"), Action: "LAND"}:                       {},
+		{Sender: "emergency", Topic: cfg.BrokerTopicFor("cargo"), Action: "CLOSE"}:                       {},
+		{Sender: "emergency", Topic: cfg.BrokerTopicFor("journal"), Action: "LOG_EVENT"}:                 {},
+		{Sender: "emergency", Topic: cfg.BrokerTopicFor("security_monitor"), Action: "isolation_status"}: {},
 	}
 	sm.mode = "ISOLATED"
 }

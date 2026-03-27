@@ -1,6 +1,10 @@
 # Delivery drone system
 
-Multi-component delivery drone system (same structure as agro in `cyber_drons`), with delivery-specific components: **cargo** instead of sprayer, and delivery mission semantics.
+Multi-component delivery drone system on a shared broker, with delivery-specific components (**cargo**, **delivery_drone**) and delivery mission semantics.
+
+**Documentation (English):** see the repo root [`docs/`](../../docs/) — [`SYSTEM.md`](../../docs/SYSTEM.md), [`EXTERNAL_API.md`](../../docs/EXTERNAL_API.md), [`quick_start.md`](../../docs/quick_start.md).
+
+**Broker topics:** internal components default to `v1.deliverydron.Delivery001.<component>` via `TOPIC_VERSION`, `SYSTEM_NAME`, and `INSTANCE_ID` (see `docs/SYSTEM.md`).
 
 ## Components
 
@@ -18,7 +22,7 @@ Multi-component delivery drone system (same structure as agro in `cyber_drons`),
 | cargo            | OPEN/CLOSE, get_state         | Full (cmd/cargo)      |
 | telemetry        | Aggregate motors + cargo state | Full (cmd/telemetry)  |
 
-All components use the shared bus (Kafka or MQTT) and follow the same patterns as the agrodron system (security_monitor policies, proxy_request/proxy_publish, journal LOG_EVENT).
+All components use the shared bus (Kafka or MQTT) with the security_monitor policy gateway (`proxy_request` / `proxy_publish`, isolation) and journal `LOG_EVENT`.
 
 ## Quick start
 

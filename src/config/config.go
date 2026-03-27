@@ -11,8 +11,10 @@ import (
 type Config struct {
 	BrokerType     string // kafka | mqtt
 	ComponentID    string // COMPONENT_ID or SYSTEM_ID
-	ComponentTopic string // COMPONENT_TOPIC or SYSTEM_NAME.COMPONENT_ID
+	ComponentTopic string // COMPONENT_TOPIC or hierarchical default
 	SystemName     string // SYSTEM_NAME (default deliverydron)
+	TopicVersion   string // TOPIC_VERSION (default v1) — first segment of hierarchical topics
+	InstanceID     string // INSTANCE_ID (default Delivery001) — third segment
 	HealthPort     string // HEALTH_PORT for HTTP health endpoint
 
 	// Kafka
@@ -44,14 +46,31 @@ func FromEnv() *Config {
 	if systemName == "" {
 		systemName = "deliverydron"
 	}
+	topicVersion := strings.TrimSpace(os.Getenv("TOPIC_VERSION"))
+	if topicVersion == "" {
+		topicVersion = "v1"
+	}
+	instanceID := strings.TrimSpace(os.Getenv("INSTANCE_ID"))
+	if instanceID == "" {
+		instanceID = "Delivery001"
+	}
 	componentTopic := strings.TrimSpace(os.Getenv("COMPONENT_TOPIC"))
-	if componentTopic == "" {
-		componentTopic = strings.TrimSpace(systemName) + "." + strings.TrimSpace(componentID)
+	cfg := &Config{
+		BrokerType:     brokerType,
+		ComponentID:    componentID,
+		SystemName:     systemName,
+		TopicVersion:   topicVersion,
+		InstanceID:     instanceID,
+		ComponentTopic: componentTopic,
+	}
+	if cfg.ComponentTopic == "" {
+		cfg.ComponentTopic = cfg.BrokerTopicFor(componentID)
 	}
 	healthPort := os.Getenv("HEALTH_PORT")
 	if healthPort == "" {
 		healthPort = "8080"
 	}
+	cfg.HealthPort = healthPort
 
 	kafkaBootstrap := os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
 	if kafkaBootstrap == "" {
@@ -79,38 +98,47 @@ func FromEnv() *Config {
 	}
 	mqttPort := 1883
 	if p := os.Getenv("MQTT_PORT"); p != "" {
-		if v, err := strconv.Atoi(p); err == nil {
+		if v, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
 			mqttPort = v
 		}
 	}
 	mqttQoS := 1
 	if q := os.Getenv("MQTT_QOS"); q != "" {
-		if v, err := strconv.Atoi(q); err == nil {
+		if v, err := strconv.Atoi(strings.TrimSpace(q)); err == nil {
 			mqttQoS = v
 		}
 	}
 
-	return &Config{
-		BrokerType:     brokerType,
-		ComponentID:    componentID,
-		ComponentTopic: componentTopic,
-		SystemName:     systemName,
-		HealthPort:     healthPort,
-		KafkaBootstrap: kafkaBootstrap,
-		KafkaGroupID:   kafkaGroupID,
-		BrokerUser:     os.Getenv("BROKER_USER"),
-		BrokerPassword: os.Getenv("BROKER_PASSWORD"),
-		MQTTBroker:     mqttBroker,
-		MQTTPort:       mqttPort,
-		MQTTQoS:        mqttQoS,
-	}
+	cfg.KafkaBootstrap = kafkaBootstrap
+	cfg.KafkaGroupID = kafkaGroupID
+	cfg.BrokerUser = os.Getenv("BROKER_USER")
+	cfg.BrokerPassword = os.Getenv("BROKER_PASSWORD")
+	cfg.MQTTBroker = mqttBroker
+	cfg.MQTTPort = mqttPort
+	cfg.MQTTQoS = mqttQoS
+	return cfg
 }
 
-// TopicFor returns the broker topic for a component: systemName.componentName.
-// Used by deliverydron components for security_monitor, journal, etc.
-func TopicFor(systemName, componentName string) string {
-	if systemName == "" {
-		systemName = "deliverydron"
+// TopicPrefix returns TOPIC_VERSION.SYSTEM_NAME.INSTANCE_ID (no trailing dot).
+// Policy placeholders ${SYSTEM_NAME} and ${TOPIC_PREFIX} expand to this string (three segments, no trailing component).
+func (c *Config) TopicPrefix() string {
+	v := strings.TrimSpace(c.TopicVersion)
+	if v == "" {
+		v = "v1"
 	}
-	return systemName + "." + componentName
+	sys := strings.TrimSpace(c.SystemName)
+	if sys == "" {
+		sys = "deliverydron"
+	}
+	inst := strings.TrimSpace(c.InstanceID)
+	if inst == "" {
+		inst = "Delivery001"
+	}
+	return v + "." + sys + "." + inst
+}
+
+// BrokerTopicFor returns the full broker topic for an internal component segment, e.g.
+// "autopilot" -> "v1.deliverydron.Delivery001.autopilot".
+func (c *Config) BrokerTopicFor(component string) string {
+	return c.TopicPrefix() + "." + strings.TrimSpace(component)
 }

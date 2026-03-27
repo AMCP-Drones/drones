@@ -37,9 +37,15 @@ def parse_env_file(path: Path) -> dict:
 
 
 def write_env_file(path: Path, env: dict):
+    """Write env dict; quote values that contain quotes, backslashes, or newlines."""
     with open(path, "w") as f:
         for key, value in env.items():
-            f.write(f"{key}={value}\n")
+            s = str(value)
+            if '"' in s or "\n" in s or "\\" in s:
+                escaped = s.replace("\\", "\\\\").replace('"', '\\"')
+                f.write(f'{key}="{escaped}"\n')
+            else:
+                f.write(f"{key}={s}\n")
 
 
 def rewrite_path(original: str, from_dir: Path, to_dir: Path) -> str:
@@ -93,13 +99,21 @@ def prepare_system(system_dir: str):
     if not root_env and (docker_dir / "example.env").exists():
         root_env = parse_env_file(docker_dir / "example.env")
 
-    # Discover components and their .env files (under system src/)
+    # Committed defaults (paths are not named .env so they stay in git; see .gitignore)
+    deliverydron_defaults = parse_env_file(system_path / "deliverydron.env")
+    system_local_overrides = parse_env_file(system_path / ".env")
+
+    # Discover components: prefer src/<name>/.env, else src/<name>/<name>.env
     components_dir = system_path / "src"
     component_envs = {}
     if components_dir.is_dir():
         for comp_dir in sorted(components_dir.iterdir()):
+            if not comp_dir.is_dir():
+                continue
             env_file = comp_dir / ".env"
-            if comp_dir.is_dir() and env_file.exists():
+            if not env_file.exists():
+                env_file = comp_dir / f"{comp_dir.name}.env"
+            if env_file.exists():
                 component_envs[comp_dir.name] = parse_env_file(env_file)
 
     output_dir = system_path / ".generated"
@@ -107,6 +121,8 @@ def prepare_system(system_dir: str):
 
     # --- Build merged .env ---
     merged_env = dict(root_env)
+    merged_env.update(deliverydron_defaults)
+    merged_env.update(system_local_overrides)
     suffixes = []
     for i, (comp_name, env) in enumerate(component_envs.items()):
         prefix = to_env_prefix(comp_name)
@@ -117,6 +133,39 @@ def prepare_system(system_dir: str):
         suffixes.append(suffix)
         merged_env[f"COMPONENT_USER_{suffix}"] = env.get("BROKER_USER", "")
         merged_env[f"COMPONENT_PASSWORD_{suffix}"] = env.get("BROKER_PASSWORD", "")
+
+    # Topic identity defaults for hierarchical component topics
+    if "SYSTEM_NAME" not in merged_env:
+        merged_env["SYSTEM_NAME"] = "deliverydron"
+    if "TOPIC_VERSION" not in merged_env:
+        merged_env["TOPIC_VERSION"] = "v1"
+    if "INSTANCE_ID" not in merged_env:
+        merged_env["INSTANCE_ID"] = "Delivery001"
+
+    sys_name = merged_env.get("SYSTEM_NAME", "deliverydron")
+    topic_ver = merged_env.get("TOPIC_VERSION", "v1")
+    instance_id = merged_env.get("INSTANCE_ID", "Delivery001")
+    topic_prefix = f"{topic_ver}.{sys_name}.{instance_id}"
+    ext_substitutions = {
+        "${TOPIC_PREFIX}": topic_prefix,
+        "${SYSTEM_NAME}": topic_prefix,
+        "$${SYSTEM_NAME}": topic_prefix,
+        "$SYSTEM_NAME": topic_prefix,
+        "${NUS_TOPIC}": merged_env.get("NUS_TOPIC", ""),
+        "${ORVD_TOPIC}": merged_env.get("ORVD_TOPIC", ""),
+        "${DRONEPORT_TOPIC}": merged_env.get("DRONEPORT_TOPIC", ""),
+        "${SITL_TOPIC}": merged_env.get("SITL_TOPIC", ""),
+        "${SITL_COMMANDS_TOPIC}": merged_env.get("SITL_COMMANDS_TOPIC", ""),
+        "${SITL_TELEMETRY_REQUEST_TOPIC}": merged_env.get(
+            "SITL_TELEMETRY_REQUEST_TOPIC", ""
+        ),
+    }
+    for key in list(merged_env.keys()):
+        if "SECURITY_POLICIES" in key and isinstance(merged_env.get(key), str):
+            val = merged_env[key]
+            for placeholder, replacement in ext_substitutions.items():
+                val = val.replace(placeholder, replacement)
+            merged_env[key] = val
 
     # --- Rewrite broker volume paths ---
     broker_dir = broker_compose_path.parent

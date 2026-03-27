@@ -47,4 +47,4 @@ Ensure `docker/example.env` or your env file has `KAFKA_BOOTSTRAP_SERVERS=kafka:
 - Health: `curl -s http://localhost:8080/health` → `ok`
 - Logs: `docker logs -f delivery_drone`
 
-The delivery drone listens on topic `components.delivery_drone` and supports actions: `ping`, `get_status`, `echo`, `deliver_package`, `get_delivery_status`.
+With default env (`TOPIC_VERSION`, `SYSTEM_NAME`, `INSTANCE_ID` from `docker/example.env`), the delivery drone listens on `v1.deliverydron.Delivery001.delivery_drone`. Override with `COMPONENT_TOPIC` (legacy examples used `components.delivery_drone`). Actions include `ping`, `get_status`, `echo`, `deliver_package`, `get_delivery_status`. See repo `docs/SYSTEM.md`.

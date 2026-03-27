@@ -57,17 +57,17 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "autopilot")
+		topic = cfg.BrokerTopicFor("autopilot")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "autopilot", topic, b)
 	secTopic := os.Getenv("SECURITY_MONITOR_TOPIC")
 	if secTopic == "" {
-		secTopic = config.TopicFor(systemName, "security_monitor")
+		secTopic = cfg.BrokerTopicFor("security_monitor")
 	}
-	journalTopic := config.TopicFor(systemName, "journal")
-	navTopic := config.TopicFor(systemName, "navigation")
-	motorsTopic := config.TopicFor(systemName, "motors")
-	cargoTopic := config.TopicFor(systemName, "cargo")
+	journalTopic := cfg.BrokerTopicFor("journal")
+	navTopic := cfg.BrokerTopicFor("navigation")
+	motorsTopic := cfg.BrokerTopicFor("motors")
+	cargoTopic := cfg.BrokerTopicFor("cargo")
 	controlInterval := 0.2
 	navPollInterval := 0.1
 	requestTimeout := 5.0

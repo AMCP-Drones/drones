@@ -30,7 +30,7 @@ func New(cfg *config.Config, b bus.Bus) *Journal {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "journal")
+		topic = cfg.BrokerTopicFor("journal")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "journal", topic, b)
 	filePath := os.Getenv("JOURNAL_FILE_PATH")

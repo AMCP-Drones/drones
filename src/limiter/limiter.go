@@ -55,17 +55,17 @@ func New(cfg *config.Config, b bus.Bus) *Limiter {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "limiter")
+		topic = cfg.BrokerTopicFor("limiter")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "limiter", topic, b)
 	secTopic := os.Getenv("SECURITY_MONITOR_TOPIC")
 	if secTopic == "" {
-		secTopic = config.TopicFor(systemName, "security_monitor")
+		secTopic = cfg.BrokerTopicFor("security_monitor")
 	}
-	journalTopic := config.TopicFor(systemName, "journal")
-	navTopic := config.TopicFor(systemName, "navigation")
-	telemetryTopic := config.TopicFor(systemName, "telemetry")
-	emergencyTopic := config.TopicFor(systemName, "emergency")
+	journalTopic := cfg.BrokerTopicFor("journal")
+	navTopic := cfg.BrokerTopicFor("navigation")
+	telemetryTopic := cfg.BrokerTopicFor("telemetry")
+	emergencyTopic := cfg.BrokerTopicFor("emergency")
 	controlInterval := 0.5
 	navPollInterval := 0.2
 	telemetryPollInterval := 0.5

@@ -7,6 +7,8 @@ services:
       dockerfile: systems/deliverydron/src/security_monitor/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${SECURITY_MONITOR_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${SECURITY_MONITOR_COMPONENT_ID:-security_monitor}
       - COMPONENT_TOPIC=${SECURITY_MONITOR_COMPONENT_TOPIC:-}
@@ -27,6 +29,8 @@ services:
       dockerfile: systems/deliverydron/src/journal/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${JOURNAL_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${JOURNAL_COMPONENT_ID:-journal}
       - COMPONENT_TOPIC=${JOURNAL_COMPONENT_TOPIC:-}
@@ -48,6 +52,8 @@ services:
       dockerfile: systems/deliverydron/src/navigation/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${NAVIGATION_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${NAVIGATION_COMPONENT_ID:-navigation}
       - COMPONENT_TOPIC=${NAVIGATION_COMPONENT_TOPIC:-}
@@ -66,6 +72,8 @@ services:
       dockerfile: systems/deliverydron/src/mission_handler/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${MISSION_HANDLER_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${MISSION_HANDLER_COMPONENT_ID:-mission_handler}
       - COMPONENT_TOPIC=${MISSION_HANDLER_COMPONENT_TOPIC:-}
@@ -84,6 +92,8 @@ services:
       dockerfile: systems/deliverydron/src/autopilot/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${AUTOPILOT_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${AUTOPILOT_COMPONENT_ID:-autopilot}
       - COMPONENT_TOPIC=${AUTOPILOT_COMPONENT_TOPIC:-}
@@ -102,6 +112,8 @@ services:
       dockerfile: systems/deliverydron/src/limiter/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${LIMITER_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${LIMITER_COMPONENT_ID:-limiter}
       - COMPONENT_TOPIC=${LIMITER_COMPONENT_TOPIC:-}
@@ -120,6 +132,8 @@ services:
       dockerfile: systems/deliverydron/src/emergency/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${EMERGENCY_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${EMERGENCY_COMPONENT_ID:-emergency}
       - COMPONENT_TOPIC=${EMERGENCY_COMPONENT_TOPIC:-}
@@ -138,6 +152,8 @@ services:
       dockerfile: systems/deliverydron/src/motors/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${MOTORS_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${MOTORS_COMPONENT_ID:-motors}
       - COMPONENT_TOPIC=${MOTORS_COMPONENT_TOPIC:-}
@@ -156,6 +172,8 @@ services:
       dockerfile: systems/deliverydron/src/cargo/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${CARGO_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${CARGO_COMPONENT_ID:-cargo}
       - COMPONENT_TOPIC=${CARGO_COMPONENT_TOPIC:-}
@@ -174,6 +192,8 @@ services:
       dockerfile: systems/deliverydron/src/telemetry/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${TELEMETRY_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${TELEMETRY_COMPONENT_ID:-telemetry}
       - COMPONENT_TOPIC=${TELEMETRY_COMPONENT_TOPIC:-}
@@ -192,6 +212,8 @@ services:
       dockerfile: systems/deliverydron/src/delivery_drone/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
+      - TOPIC_VERSION=${TOPIC_VERSION:-v1}
+      - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${DELIVERY_DRONE_SYSTEM_NAME:-deliverydron}
       - COMPONENT_ID=${DELIVERY_DRONE_COMPONENT_ID:-delivery_drone}
       - COMPONENT_TOPIC=${DELIVERY_DRONE_COMPONENT_TOPIC:-}

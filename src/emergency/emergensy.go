@@ -30,16 +30,16 @@ func New(cfg *config.Config, b bus.Bus) *Emergency {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "emergency")
+		topic = cfg.BrokerTopicFor("emergency")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "emergency", topic, b)
 	secTopic := os.Getenv("SECURITY_MONITOR_TOPIC")
 	if secTopic == "" {
-		secTopic = config.TopicFor(systemName, "security_monitor")
+		secTopic = cfg.BrokerTopicFor("security_monitor")
 	}
-	journalTopic := config.TopicFor(systemName, "journal")
-	motorsTopic := config.TopicFor(systemName, "motors")
-	cargoTopic := config.TopicFor(systemName, "cargo")
+	journalTopic := cfg.BrokerTopicFor("journal")
+	motorsTopic := cfg.BrokerTopicFor("motors")
+	cargoTopic := cfg.BrokerTopicFor("cargo")
 	e := &Emergency{
 		BaseComponent:   base,
 		systemName:      systemName,

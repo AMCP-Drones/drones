@@ -38,20 +38,20 @@ func New(cfg *config.Config, b bus.Bus) *Telemetry {
 	}
 	topic := cfg.ComponentTopic
 	if topic == "" {
-		topic = config.TopicFor(systemName, "telemetry")
+		topic = cfg.BrokerTopicFor("telemetry")
 	}
 	base := component.NewBaseComponent(cfg.ComponentID, "telemetry", topic, b)
 	secTopic := os.Getenv("SECURITY_MONITOR_TOPIC")
 	if secTopic == "" {
-		secTopic = config.TopicFor(systemName, "security_monitor")
+		secTopic = cfg.BrokerTopicFor("security_monitor")
 	}
 	motorsTopic := os.Getenv("MOTORS_TOPIC")
 	if motorsTopic == "" {
-		motorsTopic = config.TopicFor(systemName, "motors")
+		motorsTopic = cfg.BrokerTopicFor("motors")
 	}
 	cargoTopic := os.Getenv("CARGO_TOPIC")
 	if cargoTopic == "" {
-		cargoTopic = config.TopicFor(systemName, "cargo")
+		cargoTopic = cfg.BrokerTopicFor("cargo")
 	}
 	pollInterval := 1.0
 	if s := os.Getenv("TELEMETRY_POLL_INTERVAL_S"); s != "" {
