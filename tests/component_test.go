@@ -2,130 +2,64 @@ package tests
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/AMCP-Drones/drones/src/delivery"
-	"github.com/AMCP-Drones/drones/src/sdk"
+	"github.com/AMCP-Drones/drones/tests/testutil"
 )
 
-// mockBus records published messages and invokes the subscribed handler when Deliver is called.
-type mockBus struct {
-	mu         sync.Mutex
-	published  []struct{ topic string; message map[string]interface{} }
-	handler    func(map[string]interface{})
-	subscribed string
-}
-
-func (m *mockBus) Publish(ctx context.Context, topic string, message map[string]interface{}) error {
-	m.mu.Lock()
-	m.published = append(m.published, struct {
-		topic   string
-		message map[string]interface{}
-	}{topic, message})
-	m.mu.Unlock()
-	return nil
-}
-
-func (m *mockBus) Subscribe(ctx context.Context, topic string, handler func(map[string]interface{})) error {
-	m.mu.Lock()
-	m.subscribed = topic
-	m.handler = handler
-	m.mu.Unlock()
-	return nil
-}
-
-func (m *mockBus) Unsubscribe(ctx context.Context, topic string) error {
-	m.mu.Lock()
-	m.handler = nil
-	m.subscribed = ""
-	m.mu.Unlock()
-	return nil
-}
-
-func (m *mockBus) Request(ctx context.Context, topic string, message map[string]interface{}, timeoutSec float64) (map[string]interface{}, error) {
-	return sdk.CreateResponse("req1", map[string]interface{}{"ok": true}, "mock", true, ""), nil
-}
-
-func (m *mockBus) Start(ctx context.Context) error {
-	return nil
-}
-
-func (m *mockBus) Stop(ctx context.Context) error {
-	return nil
-}
-
-// Deliver simulates receiving a message (call after Start).
-func (m *mockBus) Deliver(message map[string]interface{}) {
-	m.mu.Lock()
-	h := m.handler
-	m.mu.Unlock()
-	if h != nil {
-		h(message)
-	}
-}
-
-func (m *mockBus) Published() []struct{ Topic string; Message map[string]interface{} } {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]struct{ Topic string; Message map[string]interface{} }, len(m.published))
-	for i, p := range m.published {
-		out[i].Topic = p.topic
-		out[i].Message = p.message
-	}
-	return out
-}
-
-func TestDeliveryDrone_Echo(t *testing.T) {
-	bus := &mockBus{}
-	drone := delivery.New("test_drone", "Test", "components.delivery_drone", bus)
+func TestModule_DeliveryDrone_Echo(t *testing.T) {
+	mem := testutil.NewMemoryBus()
 	ctx := context.Background()
+	topic := testutil.Config("delivery_drone").BrokerTopicFor("delivery_drone")
+	drone := delivery.New("test_drone", "Test", topic, mem)
+	if err := mem.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if err := drone.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	defer drone.Stop(ctx)
+	defer func() { _ = drone.Stop(ctx) }()
 
-	bus.Deliver(map[string]interface{}{
-		"action":         "echo",
-		"payload":        map[string]interface{}{"message": "hello"},
-		"sender":         "client",
-		"reply_to":       "replies.client",
-		"correlation_id": "c1",
-	})
-
-	pub := bus.Published()
-	if len(pub) != 1 {
-		t.Fatalf("expected 1 published message, got %d", len(pub))
+	resp, err := mem.Request(ctx, topic, map[string]interface{}{
+		"action":  "echo",
+		"payload": map[string]interface{}{"message": "hello"},
+		"sender":  "client",
+	}, 2.0)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if pub[0].Topic != "replies.client" {
-		t.Errorf("reply_to topic: got %s", pub[0].Topic)
+	pl, _ := resp["payload"].(map[string]interface{})
+	if pl == nil {
+		t.Fatalf("response: %#v", resp)
 	}
-	payload, _ := pub[0].Message["payload"].(map[string]interface{})
-	if payload == nil {
-		t.Fatal("response payload missing")
-	}
-	echo, _ := payload["echo"].(map[string]interface{})
+	echo, _ := pl["echo"].(map[string]interface{})
 	if echo == nil || echo["message"] != "hello" {
-		t.Errorf("expected echo message hello, got %v", payload)
+		t.Fatalf("echo payload: %#v", pl)
 	}
 }
 
-func TestDeliveryDrone_DeliverPackage(t *testing.T) {
-	bus := &mockBus{}
-	drone := delivery.New("test_drone", "Test", "components.delivery_drone", bus)
+func TestModule_DeliveryDrone_DeliverPackage(t *testing.T) {
+	mem := testutil.NewMemoryBus()
 	ctx := context.Background()
+	topic := testutil.Config("delivery_drone").BrokerTopicFor("delivery_drone")
+	drone := delivery.New("test_drone", "Test", topic, mem)
+	if err := mem.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if err := drone.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	defer drone.Stop(ctx)
+	defer func() { _ = drone.Stop(ctx) }()
 
-	bus.Deliver(map[string]interface{}{
-		"action":         "deliver_package",
-		"payload":        map[string]interface{}{"destination": "warehouse_1"},
-		"sender":         "client",
-		"reply_to":       "replies.client",
-		"correlation_id": "c1",
-	})
+	_, err := mem.Request(ctx, topic, map[string]interface{}{
+		"action":  "deliver_package",
+		"payload": map[string]interface{}{"destination": "warehouse_1"},
+		"sender":  "client",
+	}, 2.0)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	state := drone.State()
 	if state["deliveries"].(int) != 1 {
@@ -139,35 +73,35 @@ func TestDeliveryDrone_DeliverPackage(t *testing.T) {
 	}
 }
 
-func TestDeliveryDrone_GetDeliveryStatus(t *testing.T) {
-	bus := &mockBus{}
-	drone := delivery.New("test_drone", "Test", "components.delivery_drone", bus)
+func TestModule_DeliveryDrone_GetDeliveryStatus(t *testing.T) {
+	mem := testutil.NewMemoryBus()
 	ctx := context.Background()
+	topic := testutil.Config("delivery_drone").BrokerTopicFor("delivery_drone")
+	drone := delivery.New("test_drone", "Test", topic, mem)
+	if err := mem.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if err := drone.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	defer drone.Stop(ctx)
+	defer func() { _ = drone.Stop(ctx) }()
 
-	bus.Deliver(map[string]interface{}{
-		"action":         "get_delivery_status",
-		"payload":        map[string]interface{}{},
-		"sender":         "client",
-		"reply_to":       "replies.client",
-		"correlation_id": "c1",
-	})
-
-	pub := bus.Published()
-	if len(pub) != 1 {
-		t.Fatalf("expected 1 published message, got %d", len(pub))
+	resp, err := mem.Request(ctx, topic, map[string]interface{}{
+		"action":  "get_delivery_status",
+		"payload": map[string]interface{}{},
+		"sender":  "client",
+	}, 2.0)
+	if err != nil {
+		t.Fatal(err)
 	}
-	payload, _ := pub[0].Message["payload"].(map[string]interface{})
-	if payload == nil {
+	pl, _ := resp["payload"].(map[string]interface{})
+	if pl == nil {
 		t.Fatal("response payload missing")
 	}
-	if payload["component_id"] != "test_drone" {
-		t.Errorf("expected component_id=test_drone, got %v", payload["component_id"])
+	if pl["component_id"] != "test_drone" {
+		t.Errorf("expected component_id=test_drone, got %v", pl["component_id"])
 	}
-	if payload["status"] != "idle" {
-		t.Errorf("expected status=idle, got %v", payload["status"])
+	if pl["status"] != "idle" {
+		t.Errorf("expected status=idle, got %v", pl["status"])
 	}
 }

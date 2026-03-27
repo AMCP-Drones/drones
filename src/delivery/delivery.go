@@ -41,7 +41,7 @@ func (d *Drone) registerHandlers() {
 	d.RegisterHandler("get_delivery_status", d.handleGetDeliveryStatus)
 }
 
-func (d *Drone) handleEcho(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (d *Drone) handleEcho(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	payload := message["payload"]
 	if payload == nil {
 		payload = map[string]interface{}{}
@@ -51,13 +51,13 @@ func (d *Drone) handleEcho(ctx context.Context, message map[string]interface{}) 
 		pl = map[string]interface{}{"value": payload}
 	}
 	return map[string]interface{}{
-		"echo":          pl,
-		"from":          d.ComponentID,
-		"component_id":  d.ComponentID,
+		"echo":         pl,
+		"from":         d.ComponentID,
+		"component_id": d.ComponentID,
 	}, nil
 }
 
-func (d *Drone) handleDeliverPackage(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (d *Drone) handleDeliverPackage(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	payload, _ := message["payload"].(map[string]interface{})
 	dest := ""
 	if payload != nil {
@@ -82,7 +82,7 @@ func (d *Drone) handleDeliverPackage(ctx context.Context, message map[string]int
 	}, nil
 }
 
-func (d *Drone) handleGetDeliveryStatus(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (d *Drone) handleGetDeliveryStatus(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
 	d.stateMu.RLock()
 	defer d.stateMu.RUnlock()
 	out := make(map[string]interface{})

@@ -1,26 +1,78 @@
-# Example docker-compose for delivery_drone. Broker (Kafka/MQTT) expected on drones_net.
-# Use with: docker compose -f docker/docker-compose.yml --env-file docker/example.env up
+# Broker infrastructure (Kafka + Mosquitto). Application systems/components
+# are composed via scripts/prepare_system.py (e.g. systems/deliverydron).
+name: drones
 
 services:
-  delivery_drone:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    environment:
-      - COMPONENT_ID=${COMPONENT_ID:-delivery_drone}
-      - BROKER_TYPE=${BROKER_TYPE:-kafka}
-      - HEALTH_PORT=${HEALTH_PORT:-8080}
-      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      - MQTT_BROKER=${MQTT_BROKER:-mosquitto}
-      - MQTT_PORT=${MQTT_PORT:-1883}
-      - BROKER_USER=${BROKER_USER:-}
-      - BROKER_PASSWORD=${BROKER_PASSWORD:-}
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    profiles: ["kafka"]
     ports:
-      - "${HEALTH_PORT:-8080}:8080"
+      - "${KAFKA_PORT:-9092}:9092"
+      - "${KAFKA_INTERNAL_PORT:-29092}:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: SASL_PLAINTEXT://0.0.0.0:9092,SASL_PLAINTEXT_INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: SASL_PLAINTEXT://localhost:${KAFKA_PORT:-9092},SASL_PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_PLAINTEXT_INTERNAL:SASL_PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: SASL_PLAINTEXT_INTERNAL
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: PLAIN
+      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_OPTS: -Djava.security.auth.login.config=/tmp/jaas.conf
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      COMPONENT_USER_A: ${COMPONENT_USER_A:-}
+      COMPONENT_PASSWORD_A: ${COMPONENT_PASSWORD_A:-}
+      COMPONENT_USER_B: ${COMPONENT_USER_B:-}
+      COMPONENT_PASSWORD_B: ${COMPONENT_PASSWORD_B:-}
+    volumes:
+      - ./kafka/entrypoint.sh:/entrypoint.sh:ro
+    command: ["/bin/sh", "/entrypoint.sh"]
     networks:
       - drones_net
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f java || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+    restart: unless-stopped
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    user: "0:0"
+    profiles: ["mqtt"]
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    environment:
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      COMPONENT_USER_A: ${COMPONENT_USER_A:-}
+      COMPONENT_PASSWORD_A: ${COMPONENT_PASSWORD_A:-}
+      COMPONENT_USER_B: ${COMPONENT_USER_B:-}
+      COMPONENT_PASSWORD_B: ${COMPONENT_PASSWORD_B:-}
+    volumes:
+      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mqtt/entrypoint.sh:/entrypoint.sh:ro
+    command: ["/bin/sh", "/entrypoint.sh"]
+    networks:
+      - drones_net
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h localhost -u $$ADMIN_USER -P $$ADMIN_PASSWORD -t healthcheck -m ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
 networks:
   drones_net:
-    external: true
+    driver: bridge
+    name: ${DOCKER_NETWORK:-drones_net}

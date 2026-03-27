@@ -1,9 +1,11 @@
+// Package kafka implements the bus.Bus interface using Apache Kafka.
 package kafka
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -24,7 +26,7 @@ type Bus struct {
 	handlersMu      sync.RWMutex
 	pending         map[string]chan map[string]interface{}
 	pendingMu       sync.Mutex
-	consumerGroupID  string
+	consumerGroupID string
 	running         bool
 	consumeCancel   context.CancelFunc
 	consumeCtx      context.Context
@@ -38,14 +40,14 @@ func New(broker, clientID, groupID, username, password string) *Bus {
 	}
 	replyTopic := "replies." + clientID + "." + fmt.Sprintf("%d", time.Now().UnixNano()%100000)
 	return &Bus{
-		broker:         broker,
-		clientID:       clientID,
-		groupID:        groupID,
-		username:       username,
-		password:       password,
-		replyTopic:     replyTopic,
-		handlers:       make(map[string]func(map[string]interface{})),
-		pending:        make(map[string]chan map[string]interface{}),
+		broker:          broker,
+		clientID:        clientID,
+		groupID:         groupID,
+		username:        username,
+		password:        password,
+		replyTopic:      replyTopic,
+		handlers:        make(map[string]func(map[string]interface{})),
+		pending:         make(map[string]chan map[string]interface{}),
 		consumerGroupID: groupID + "_cg",
 	}
 }
@@ -119,8 +121,12 @@ func (b *Bus) startConsumer(ctx context.Context) {
 	b.consumeTopicsMu.Unlock()
 	topics := b.getTopics()
 	handler := &consumerHandler{bus: b}
-	_ = group.Consume(ctx, topics, handler)
-	_ = group.Close()
+	if err := group.Consume(ctx, topics, handler); err != nil && ctx.Err() == nil {
+		log.Printf("kafka consume: %v", err)
+	}
+	if err := group.Close(); err != nil {
+		log.Printf("kafka consumer group close: %v", err)
+	}
 }
 
 type consumerHandler struct {
@@ -163,6 +169,7 @@ func (h *consumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, clai
 func (h *consumerHandler) Setup(sarama.ConsumerGroupSession) error   { return nil }
 func (h *consumerHandler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 
+// Start starts the bus: creates producer and consumer group, subscribes to handler and reply topics.
 func (b *Bus) Start(ctx context.Context) error {
 	if b.running {
 		return nil
@@ -170,7 +177,9 @@ func (b *Bus) Start(ctx context.Context) error {
 	if _, err := b.getProducer(); err != nil {
 		return err
 	}
-	_ = b.publishJSON(b.replyTopic, map[string]interface{}{"_init": true})
+	if err := b.publishJSON(b.replyTopic, map[string]interface{}{"_init": true}); err != nil {
+		log.Printf("kafka reply topic init publish: %v", err)
+	}
 	b.running = true
 	b.consumeCtx, b.consumeCancel = context.WithCancel(ctx)
 	go b.startConsumer(b.consumeCtx)
@@ -178,7 +187,8 @@ func (b *Bus) Start(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bus) Stop(ctx context.Context) error {
+// Stop stops the consumer and producer and releases resources.
+func (b *Bus) Stop(_ context.Context) error {
 	if !b.running {
 		return nil
 	}
@@ -190,34 +200,41 @@ func (b *Bus) Stop(ctx context.Context) error {
 	cg := b.consumer
 	b.consumeTopicsMu.Unlock()
 	if cg != nil {
-		_ = cg.Close()
+		if err := cg.Close(); err != nil {
+			log.Printf("kafka consumer close: %v", err)
+		}
 	}
 	if b.producer != nil {
-		_ = b.producer.Close()
+		if err := b.producer.Close(); err != nil {
+			log.Printf("kafka producer close: %v", err)
+		}
 		b.producer = nil
 	}
 	return nil
 }
 
-func (b *Bus) Publish(ctx context.Context, topic string, message map[string]interface{}) error {
+// Publish sends a JSON message to the given topic.
+func (b *Bus) Publish(_ context.Context, topic string, message map[string]interface{}) error {
 	return b.publishJSON(topic, message)
 }
 
 // Subscribe registers a handler for the topic. Call Subscribe for all topics before Start().
-func (b *Bus) Subscribe(ctx context.Context, topic string, handler func(map[string]interface{})) error {
+func (b *Bus) Subscribe(_ context.Context, topic string, handler func(map[string]interface{})) error {
 	b.handlersMu.Lock()
 	b.handlers[topic] = handler
 	b.handlersMu.Unlock()
 	return nil
 }
 
-func (b *Bus) Unsubscribe(ctx context.Context, topic string) error {
+// Unsubscribe removes the handler for the topic.
+func (b *Bus) Unsubscribe(_ context.Context, topic string) error {
 	b.handlersMu.Lock()
 	delete(b.handlers, topic)
 	b.handlersMu.Unlock()
 	return nil
 }
 
+// Request publishes a message with correlation_id and reply_to, then waits for a response or timeout.
 func (b *Bus) Request(ctx context.Context, topic string, message map[string]interface{}, timeoutSec float64) (map[string]interface{}, error) {
 	if !b.running {
 		if err := b.Start(ctx); err != nil {
