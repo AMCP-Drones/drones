@@ -148,9 +148,9 @@ def prepare_system(system_dir: str):
     topic_prefix = f"{topic_ver}.{sys_name}.{instance_id}"
     ext_substitutions = {
         "${TOPIC_PREFIX}": topic_prefix,
-        "${SYSTEM_NAME}": topic_prefix,
-        "$${SYSTEM_NAME}": topic_prefix,
-        "$SYSTEM_NAME": topic_prefix,
+        "${SYSTEM_NAME}": sys_name,
+        "$${SYSTEM_NAME}": sys_name,
+        "$SYSTEM_NAME": sys_name,
         "${NUS_TOPIC}": merged_env.get("NUS_TOPIC", ""),
         "${ORVD_TOPIC}": merged_env.get("ORVD_TOPIC", ""),
         "${DRONEPORT_TOPIC}": merged_env.get("DRONEPORT_TOPIC", ""),

@@ -150,7 +150,7 @@ If `POLICY_ADMIN_SENDER` is set to your admin client’s `sender` string, that c
 
 ## 9. Upgrading from flat topics
 
-Older deployments used `deliverydron.autopilot` style names. Set explicitly per service:
+Older deployments used `deliverydron.autopilot-style` names. Set explicitly per service:
 
 ```bash
 COMPONENT_TOPIC=deliverydron.autopilot

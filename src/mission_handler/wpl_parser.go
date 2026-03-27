@@ -49,8 +49,8 @@ func ParseWPL(wplContent string, missionID string) (map[string]interface{}, stri
 		if errIdx != nil || errCmd != nil || errLat != nil || errLon != nil || errAlt != nil {
 			return nil, "invalid_wpl_line_" + strconv.Itoa(i) + "_parse_error"
 		}
-		currentFrame, _ := strconv.Atoi(strings.TrimSpace(parts[2]))
-		if idx == 0 && currentFrame == 0 {
+		current, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if idx == 0 && current == 1 {
 			home = map[string]interface{}{"lat": lat, "lon": lon, "alt_m": alt}
 			continue
 		}
@@ -77,10 +77,14 @@ func ParseWPL(wplContent string, missionID string) (map[string]interface{}, stri
 	if missionID == "" {
 		missionID = "wpl-" + strconv.FormatInt(time.Now().UnixMilli(), 10)
 	}
+	stepsAsInterface := make([]interface{}, len(steps))
+	for i, step := range steps {
+		stepsAsInterface[i] = step
+	}
 	return map[string]interface{}{
 		"mission_id": missionID,
 		"home":       home,
-		"steps":      steps,
+		"steps":      stepsAsInterface,
 	}, ""
 }
 

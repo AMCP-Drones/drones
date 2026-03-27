@@ -35,6 +35,9 @@ type SecurityMonitor struct {
 	proxyTimeoutSec float64
 }
 
+// SecurityMonitorComponentID is the fixed trusted sender ID for security monitor.
+const SecurityMonitorComponentID = "security_monitor"
+
 // New creates a SecurityMonitor. Call RegisterHandler for actions, then Start.
 func New(cfg *config.Config, b bus.Bus) *SecurityMonitor {
 	systemName := cfg.SystemName
@@ -45,11 +48,12 @@ func New(cfg *config.Config, b bus.Bus) *SecurityMonitor {
 	if topic == "" {
 		topic = cfg.BrokerTopicFor("security_monitor")
 	}
-	base := component.NewBaseComponent(cfg.ComponentID, "security_monitor", topic, b)
+	base := component.NewBaseComponent(SecurityMonitorComponentID, "security_monitor", topic, b)
 	topicPrefix := cfg.TopicPrefix()
 	rawPolicies := os.Getenv("SECURITY_POLICIES")
 	rawPolicies = strings.ReplaceAll(rawPolicies, "${TOPIC_PREFIX}", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "${SYSTEM_NAME}", topicPrefix)
+	rawPolicies = strings.ReplaceAll(rawPolicies, "$${SYSTEM_NAME}", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "$SYSTEM_NAME", topicPrefix)
 	policyAdmin := strings.TrimSpace(os.Getenv("POLICY_ADMIN_SENDER"))
 	timeout := 10.0

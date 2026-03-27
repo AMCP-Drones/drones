@@ -222,11 +222,13 @@ func (l *Limiter) handleUpdateConfig(_ context.Context, message map[string]inter
 	if v, ok := payload["max_alt_deviation_m"].(float64); ok {
 		l.maxAltDeviationM = v
 	}
+	localMaxDistanceFromPathM := l.maxDistanceFromPathM
+	localMaxAltDeviationM := l.maxAltDeviationM
 	l.mu.Unlock()
 	return map[string]interface{}{
 		"ok":                       true,
-		"max_distance_from_path_m": l.maxDistanceFromPathM,
-		"max_alt_deviation_m":      l.maxAltDeviationM,
+		"max_distance_from_path_m": localMaxDistanceFromPathM,
+		"max_alt_deviation_m":      localMaxAltDeviationM,
 	}, nil
 }
 
@@ -318,11 +320,15 @@ func (l *Limiter) recalculate(ctx context.Context) {
 }
 
 func (l *Limiter) publishEmergency(ctx context.Context, distanceM, altDev float64) {
+	l.mu.RLock()
+	localMaxDistanceFromPathM := l.maxDistanceFromPathM
+	localMaxAltDeviationM := l.maxAltDeviationM
+	l.mu.RUnlock()
 	details := map[string]interface{}{
 		"distance_from_path_m":     distanceM,
-		"max_distance_from_path_m": l.maxDistanceFromPathM,
+		"max_distance_from_path_m": localMaxDistanceFromPathM,
 		"alt_deviation_m":          altDev,
-		"max_alt_deviation_m":      l.maxAltDeviationM,
+		"max_alt_deviation_m":      localMaxAltDeviationM,
 	}
 	l.logToJournal(ctx, "LIMITER_EMERGENCY_LAND_REQUIRED", details)
 	eventPayload := map[string]interface{}{

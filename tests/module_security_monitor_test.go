@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/AMCP-Drones/drones/src/journal"
 	securitymonitor "github.com/AMCP-Drones/drones/src/security_monitor"
@@ -26,8 +27,13 @@ func TestModule_SecurityMonitor_ProxyPublishDeniedWithoutPolicy(t *testing.T) {
 	defer func() { _ = sm.Stop(ctx) }()
 
 	journalTopic := testutil.Config("journal").BrokerTopicFor("journal")
-	called := false
-	_ = mem.Subscribe(ctx, journalTopic, func(map[string]interface{}) { called = true })
+	calledCh := make(chan struct{}, 1)
+	_ = mem.Subscribe(ctx, journalTopic, func(map[string]interface{}) {
+		select {
+		case calledCh <- struct{}{}:
+		default:
+		}
+	})
 
 	// No reply_to: denied proxy returns (nil, nil) and the monitor does not send a response.
 	err := mem.Publish(ctx, cfg.BrokerTopicFor("security_monitor"), map[string]interface{}{
@@ -43,8 +49,13 @@ func TestModule_SecurityMonitor_ProxyPublishDeniedWithoutPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if called {
+
+	// Wait briefly to ensure no handler is called
+	select {
+	case <-calledCh:
 		t.Fatal("journal handler should not run")
+	case <-time.After(100 * time.Millisecond):
+		// Expected: no call received
 	}
 }
 

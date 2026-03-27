@@ -236,6 +236,7 @@ func (a *Autopilot) handleCmd(_ context.Context, message map[string]interface{})
 		}
 	case "ABORT":
 		a.state = StateAborted
+		a.koverActive = false
 		a.mu.Unlock()
 		// Safe actuator sequence: stop motors, close cargo
 		if a.lastNavState != nil {
@@ -252,8 +253,10 @@ func (a *Autopilot) handleCmd(_ context.Context, message map[string]interface{})
 		a.mission = nil
 		a.currentStepIndex = 0
 		a.state = StateIDLE
+		a.koverActive = false
 	case "EMERGENCY_STOP":
 		a.state = StateEmergencyStop
+		a.koverActive = false
 		a.mu.Unlock()
 		// Safe actuator sequence: stop motors, close cargo
 		if a.lastNavState != nil {

@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -25,17 +26,18 @@ func TestE2E_KafkaPubSub(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
+	uniqueID := fmt.Sprintf("%d", time.Now().UnixNano())
 	cfg := &config.Config{
 		BrokerType:     "kafka",
-		ComponentID:    "e2e_test_client",
+		ComponentID:    "e2e_test_client_" + uniqueID,
 		KafkaBootstrap: bootstrap,
-		KafkaGroupID:   "e2e_test_group",
+		KafkaGroupID:   "e2e_test_group_" + uniqueID,
 		BrokerUser:     os.Getenv("BROKER_USER"),
 		BrokerPassword: os.Getenv("BROKER_PASSWORD"),
 		SystemName:     "e2e",
 		TopicVersion:   "v1",
 		InstanceID:     "E2E001",
-		ComponentTopic: "v1.e2e.E2E001.e2e_probe",
+		ComponentTopic: "v1.e2e.E2E001.e2e_probe_" + uniqueID,
 	}
 
 	b, err := bus.New(cfg)
@@ -58,7 +60,27 @@ func TestE2E_KafkaPubSub(t *testing.T) {
 	}
 	defer func() { _ = b.Stop(context.Background()) }()
 
-	time.Sleep(2 * time.Second) // consumer join
+	// Wait for consumer to be ready by checking if the channel is set up
+	ready := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(50 * time.Millisecond):
+				// Attempt a test publish to check readiness
+				if err := b.Publish(ctx, cfg.ComponentTopic, map[string]interface{}{"action": "ping"}); err == nil {
+					close(ready)
+					return
+				}
+			}
+		}
+	}()
+	select {
+	case <-ready:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for broker readiness")
+	}
 
 	if err := b.Publish(ctx, cfg.ComponentTopic, map[string]interface{}{
 		"action": "e2e_ping",

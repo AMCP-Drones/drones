@@ -64,16 +64,37 @@ func TestIntegration_Telemetry_AggregatesMotorsAndCargo(t *testing.T) {
 	}
 	defer func() { _ = tel.Stop(ctx) }()
 
-	time.Sleep(150 * time.Millisecond)
+	// Poll for telemetry data instead of blind sleep
+	var resp map[string]interface{}
+	var err error
+	timeout := time.After(3 * time.Second)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
 
-	resp, err := mem.Request(ctx, telTopic, map[string]interface{}{
-		"action":  "get_state",
-		"sender":  "security_monitor",
-		"payload": map[string]interface{}{},
-	}, 3.0)
-	if err != nil {
-		t.Fatal(err)
+	for {
+		resp, err = mem.Request(ctx, telTopic, map[string]interface{}{
+			"action":  "get_state",
+			"sender":  "security_monitor",
+			"payload": map[string]interface{}{},
+		}, 2.0)
+		if err == nil {
+			pl, _ := resp["payload"].(map[string]interface{})
+			if pl != nil {
+				mot, _ := pl["motors"].(map[string]interface{})
+				car, _ := pl["cargo"].(map[string]interface{})
+				if mot != nil && car != nil {
+					break
+				}
+			}
+		}
+		select {
+		case <-timeout:
+			t.Fatalf("timeout waiting for telemetry data; last response: %#v, err: %v", resp, err)
+		case <-ticker.C:
+			continue
+		}
 	}
+
 	pl, _ := resp["payload"].(map[string]interface{})
 	if pl == nil {
 		t.Fatalf("missing payload: %#v", resp)
