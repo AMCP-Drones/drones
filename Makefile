@@ -1,4 +1,4 @@
-.PHONY: build test unit-test test-e2e docker-build docker-up run vendor deps init prepare system-up system-down build-all
+.PHONY: build test unit-test test-e2e docker-build docker-test docker-up run vendor deps init prepare system-up system-down build-all
 
 BINARY := delivery-drone
 DOCKER_IMAGE := delivery_drone
@@ -48,6 +48,9 @@ docker-build:
 	else \
 		docker build -t $(DOCKER_IMAGE) -f docker/Dockerfile .; \
 	fi
+
+docker-test: docker-build
+	docker run --rm $(DOCKER_IMAGE) --help
 
 # Expects broker on drones_net. Start parent first:
 #   cd /path/to/sbd-drones-economics && docker compose -f docker/docker-compose.yml --env-file docker/.env --profile kafka up -d
