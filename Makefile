@@ -50,7 +50,8 @@ docker-build:
 	fi
 
 docker-test: docker-build
-	docker run --rm $(DOCKER_IMAGE) --help
+	docker run --rm --entrypoint /bin/sh $(DOCKER_IMAGE) -c "test -x /app/delivery-drone"
+
 
 # Expects broker on drones_net. Start parent first:
 #   cd /path/to/sbd-drones-economics && docker compose -f docker/docker-compose.yml --env-file docker/.env --profile kafka up -d
