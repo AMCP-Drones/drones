@@ -52,6 +52,7 @@ docker-build:
 docker-test: docker-build
 	docker run --rm --entrypoint /bin/sh $(DOCKER_IMAGE) -c "test -x /app/delivery-drone"
 
+
 # Expects broker on drones_net. Start parent first:
 #   cd /path/to/sbd-drones-economics && docker compose -f docker/docker-compose.yml --env-file docker/.env --profile kafka up -d
 # Broker auth (parent Kafka uses SASL): pass BROKER_USER/BROKER_PASSWORD; defaults match parent docker/example.env. For parent .env use: BROKER_USER=admin BROKER_PASSWORD=<from docker/.env> make docker-up
