@@ -29,26 +29,6 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       COMPONENT_USER_A: ${COMPONENT_USER_A:-}
       COMPONENT_PASSWORD_A: ${COMPONENT_PASSWORD_A:-}
-      COMPONENT_USER_B: ${COMPONENT_USER_B:-}
-      COMPONENT_PASSWORD_B: ${COMPONENT_PASSWORD_B:-}
-      COMPONENT_USER_C: ${COMPONENT_USER_C:-}
-      COMPONENT_PASSWORD_C: ${COMPONENT_PASSWORD_C:-}
-      COMPONENT_USER_D: ${COMPONENT_USER_D:-}
-      COMPONENT_PASSWORD_D: ${COMPONENT_PASSWORD_D:-}
-      COMPONENT_USER_E: ${COMPONENT_USER_E:-}
-      COMPONENT_PASSWORD_E: ${COMPONENT_PASSWORD_E:-}
-      COMPONENT_USER_F: ${COMPONENT_USER_F:-}
-      COMPONENT_PASSWORD_F: ${COMPONENT_PASSWORD_F:-}
-      COMPONENT_USER_G: ${COMPONENT_USER_G:-}
-      COMPONENT_PASSWORD_G: ${COMPONENT_PASSWORD_G:-}
-      COMPONENT_USER_H: ${COMPONENT_USER_H:-}
-      COMPONENT_PASSWORD_H: ${COMPONENT_PASSWORD_H:-}
-      COMPONENT_USER_I: ${COMPONENT_USER_I:-}
-      COMPONENT_PASSWORD_I: ${COMPONENT_PASSWORD_I:-}
-      COMPONENT_USER_J: ${COMPONENT_USER_J:-}
-      COMPONENT_PASSWORD_J: ${COMPONENT_PASSWORD_J:-}
-      COMPONENT_USER_K: ${COMPONENT_USER_K:-}
-      COMPONENT_PASSWORD_K: ${COMPONENT_PASSWORD_K:-}
     volumes:
     - ../../../docker/kafka/entrypoint.sh:/entrypoint.sh:ro
     command:
@@ -78,26 +58,6 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       COMPONENT_USER_A: ${COMPONENT_USER_A:-}
       COMPONENT_PASSWORD_A: ${COMPONENT_PASSWORD_A:-}
-      COMPONENT_USER_B: ${COMPONENT_USER_B:-}
-      COMPONENT_PASSWORD_B: ${COMPONENT_PASSWORD_B:-}
-      COMPONENT_USER_C: ${COMPONENT_USER_C:-}
-      COMPONENT_PASSWORD_C: ${COMPONENT_PASSWORD_C:-}
-      COMPONENT_USER_D: ${COMPONENT_USER_D:-}
-      COMPONENT_PASSWORD_D: ${COMPONENT_PASSWORD_D:-}
-      COMPONENT_USER_E: ${COMPONENT_USER_E:-}
-      COMPONENT_PASSWORD_E: ${COMPONENT_PASSWORD_E:-}
-      COMPONENT_USER_F: ${COMPONENT_USER_F:-}
-      COMPONENT_PASSWORD_F: ${COMPONENT_PASSWORD_F:-}
-      COMPONENT_USER_G: ${COMPONENT_USER_G:-}
-      COMPONENT_PASSWORD_G: ${COMPONENT_PASSWORD_G:-}
-      COMPONENT_USER_H: ${COMPONENT_USER_H:-}
-      COMPONENT_PASSWORD_H: ${COMPONENT_PASSWORD_H:-}
-      COMPONENT_USER_I: ${COMPONENT_USER_I:-}
-      COMPONENT_PASSWORD_I: ${COMPONENT_PASSWORD_I:-}
-      COMPONENT_USER_J: ${COMPONENT_USER_J:-}
-      COMPONENT_PASSWORD_J: ${COMPONENT_PASSWORD_J:-}
-      COMPONENT_USER_K: ${COMPONENT_USER_K:-}
-      COMPONENT_PASSWORD_K: ${COMPONENT_PASSWORD_K:-}
     volumes:
     - ../../../docker/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     - ../../../docker/mqtt/entrypoint.sh:/entrypoint.sh:ro
@@ -119,7 +79,7 @@ services:
   security_monitor:
     build:
       context: ../../..
-      dockerfile: ../src/security_monitor/docker/Dockerfile
+      dockerfile: ../../../components/security_monitor/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -150,7 +110,7 @@ services:
   journal:
     build:
       context: ../../..
-      dockerfile: ../src/journal/docker/Dockerfile
+      dockerfile: ../../../components/journal/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -182,7 +142,7 @@ services:
   navigation:
     build:
       context: ../../..
-      dockerfile: ../src/navigation/docker/Dockerfile
+      dockerfile: ../../../components/navigation/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -211,7 +171,7 @@ services:
   mission_handler:
     build:
       context: ../../..
-      dockerfile: ../src/mission_handler/docker/Dockerfile
+      dockerfile: ../../../components/mission_handler/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -240,7 +200,7 @@ services:
   autopilot:
     build:
       context: ../../..
-      dockerfile: ../src/autopilot/docker/Dockerfile
+      dockerfile: ../../../components/autopilot/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -269,7 +229,7 @@ services:
   limiter:
     build:
       context: ../../..
-      dockerfile: ../src/limiter/docker/Dockerfile
+      dockerfile: ../../../components/limiter/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -298,7 +258,7 @@ services:
   emergency:
     build:
       context: ../../..
-      dockerfile: ../src/emergency/docker/Dockerfile
+      dockerfile: ../../../components/emergency/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -327,7 +287,7 @@ services:
   motors:
     build:
       context: ../../..
-      dockerfile: ../src/motors/docker/Dockerfile
+      dockerfile: ../../../components/motors/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -356,7 +316,7 @@ services:
   cargo:
     build:
       context: ../../..
-      dockerfile: ../src/cargo/docker/Dockerfile
+      dockerfile: ../../../components/cargo/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -385,7 +345,7 @@ services:
   telemetry:
     build:
       context: ../../..
-      dockerfile: ../src/telemetry/docker/Dockerfile
+      dockerfile: ../../../components/telemetry/docker/Dockerfile
     profiles:
     - kafka
     - mqtt
@@ -414,7 +374,7 @@ services:
   delivery_drone:
     build:
       context: ../../..
-      dockerfile: ../src/delivery_drone/docker/Dockerfile
+      dockerfile: ../../../components/delivery_drone/docker/Dockerfile
     profiles:
     - kafka
     - mqtt

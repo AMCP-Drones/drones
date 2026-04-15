@@ -21,7 +21,7 @@ system-down:
 	@cd systems/deliverydron && $(MAKE) docker-down
 
 build:
-	GOPROXY=DIRECT CGO_ENABLED=0 go build $(BUILD_MOD) -o $(BINARY) ./cmd/delivery_drone
+	GOPROXY=DIRECT CGO_ENABLED=0 go build $(BUILD_MOD) -o $(BINARY) ./components/delivery_drone/cmd/delivery_drone
 
 # Download deps (use if go build fails with TLS handshake timeout)
 deps:
@@ -75,4 +75,4 @@ run: build
 
 # Build both delivery_drone and stub_component (used by system Dockerfiles)
 build-all:
-	GOPROXY=DIRECT CGO_ENABLED=0 go build $(BUILD_MOD) -o /dev/null ./cmd/delivery_drone ./cmd/stub_component
+	GOPROXY=DIRECT CGO_ENABLED=0 go build $(BUILD_MOD) -o /dev/null ./components/delivery_drone/cmd/delivery_drone ./components/stub_component/cmd/stub_component

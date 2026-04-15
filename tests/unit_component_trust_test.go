@@ -3,7 +3,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/AMCP-Drones/drones/src/component"
+	"github.com/AMCP-Drones/drones/components/component/src"
 )
 
 func TestUnit_IsTrustedSender_SecurityMonitorPrefix(t *testing.T) {

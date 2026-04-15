@@ -6,9 +6,8 @@ Go services for a **multi-component delivery drone** that talk only over **Kafka
 
 | Path | What it is |
 |------|------------|
-| [`cmd/`](cmd/) | One `main` per component binary (`autopilot`, `security_monitor`, `delivery_drone`, …). |
-| [`src/`](src/) | Shared code: [`bus`](src/bus) (Kafka/MQTT), [`config`](src/config), [`component`](src/component), and package-per-component logic. |
-| [`systems/deliverydron/`](systems/deliverydron/) | Full-stack Compose for the delivery system; Dockerfiles live under `systems/deliverydron/src/<component>/docker/`. |
+| [`components/`](components/) | Per-component layout (aligned with Python reference projects): `components/<name>/src/` (Go packages), `components/<name>/cmd/<name>/` (`main`), [`docker/`](components/navigation/docker) (images). Shared libraries live here too (e.g. [`components/bus/src`](components/bus/src), [`components/config/src`](components/config/src)). |
+| [`systems/deliverydron/`](systems/deliverydron/) | Full-stack Compose for the delivery system; build contexts point at repo root, Dockerfiles under each `components/<component>/docker/`. |
 | [`docker/`](docker/) | Broker-only Compose (Kafka, Mosquitto); merged into `.generated` by prepare. |
 | [`scripts/prepare_system.py`](scripts/prepare_system.py) | Merges broker + system Compose and env → `systems/deliverydron/.generated/`. |
 | [`docs/`](docs/) | Architecture and integration documentation (see below). |

@@ -4,7 +4,7 @@ services:
   security_monitor:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/security_monitor/docker/Dockerfile
+      dockerfile: components/security_monitor/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -26,7 +26,7 @@ services:
   journal:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/journal/docker/Dockerfile
+      dockerfile: components/journal/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -49,7 +49,7 @@ services:
   navigation:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/navigation/docker/Dockerfile
+      dockerfile: components/navigation/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -69,7 +69,7 @@ services:
   mission_handler:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/mission_handler/docker/Dockerfile
+      dockerfile: components/mission_handler/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -89,7 +89,7 @@ services:
   autopilot:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/autopilot/docker/Dockerfile
+      dockerfile: components/autopilot/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -109,7 +109,7 @@ services:
   limiter:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/limiter/docker/Dockerfile
+      dockerfile: components/limiter/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -129,7 +129,7 @@ services:
   emergency:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/emergency/docker/Dockerfile
+      dockerfile: components/emergency/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -149,7 +149,7 @@ services:
   motors:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/motors/docker/Dockerfile
+      dockerfile: components/motors/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -169,7 +169,7 @@ services:
   cargo:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/cargo/docker/Dockerfile
+      dockerfile: components/cargo/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -189,7 +189,7 @@ services:
   telemetry:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/telemetry/docker/Dockerfile
+      dockerfile: components/telemetry/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
@@ -209,7 +209,7 @@ services:
   delivery_drone:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/src/delivery_drone/docker/Dockerfile
+      dockerfile: components/delivery_drone/docker/Dockerfile
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}

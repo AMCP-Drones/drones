@@ -51,7 +51,7 @@ This Go delivery stack **does not** currently implement ORVD / NUS / droneport d
 }
 ```
 
-Responses (when using request/response) follow the shared response shape from `src/sdk` (`success`, `payload`, `correlation_id`, etc.).
+Responses (when using request/response) follow the shared response shape from `components/sdk/src` (`success`, `payload`, `correlation_id`, etc.).
 
 ---
 
@@ -123,12 +123,12 @@ Example `LOAD_MISSION` payload (shape depends on handler implementation; often i
 
 ## 6. Delivery drone service (platform module)
 
-**Binary:** `cmd/delivery_drone`  
+**Binary:** `components/delivery_drone/cmd/delivery_drone`  
 **Default topic:** derived like other components → `v1.deliverydron.Delivery001.delivery_drone` when using default env.
 
 Exposes HTTP **health** on `HEALTH_PORT` (default `8080`) at `/health`.
 
-Broker actions (non-exhaustive): `ping`, `get_status`, `echo`, `deliver_package`, `get_delivery_status` — see `src/delivery`.
+Broker actions (non-exhaustive): `ping`, `get_status`, `echo`, `deliver_package`, `get_delivery_status` — see `components/delivery/src`.
 
 ---
 
@@ -167,4 +167,4 @@ Or migrate policies and clients to `v1.deliverydron.Delivery001.autopilot` and r
 | On-board topic segments | `v1.deliverydron.Delivery001.<component>` |
 | Payload actuation | `cargo` `OPEN` / `CLOSE` (delivery), not crop sprayer commands |
 | Emergency component | `emergency` |
-| ATM / port flow on `START` | Not implemented in `src/autopilot` (extension point) |
+| ATM / port flow on `START` | Not implemented in `components/autopilot/src` (extension point) |

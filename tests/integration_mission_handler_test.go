@@ -6,10 +6,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/AMCP-Drones/drones/src/bus"
-	"github.com/AMCP-Drones/drones/src/journal"
-	missionhandler "github.com/AMCP-Drones/drones/src/mission_handler"
-	securitymonitor "github.com/AMCP-Drones/drones/src/security_monitor"
+	"github.com/AMCP-Drones/drones/components/bus/src"
+	"github.com/AMCP-Drones/drones/components/journal/src"
+	missionhandler "github.com/AMCP-Drones/drones/components/mission_handler/src"
+	securitymonitor "github.com/AMCP-Drones/drones/components/security_monitor/src"
 	"github.com/AMCP-Drones/drones/tests/testutil"
 )
 

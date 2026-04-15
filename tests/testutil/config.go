@@ -1,6 +1,6 @@
 package testutil
 
-import "github.com/AMCP-Drones/drones/src/config"
+import "github.com/AMCP-Drones/drones/components/config/src"
 
 // Config returns a config for in-memory tests: hierarchical topics v1.testsys.T001.<componentID>.
 func Config(componentID string) *config.Config {
