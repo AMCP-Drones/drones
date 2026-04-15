@@ -1,2 +1,0 @@
-# For scripts/prepare_system.py (merge broker + system compose)
-pyyaml>=6.0
