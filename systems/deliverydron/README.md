@@ -48,6 +48,9 @@ Or from this directory:
 - `make docker-down` — stop
 - `make docker-logs` — follow logs
 - `make unit-test` — run Go tests from repo root
+- `make run` — robust startup that runs `go mod download`, `go mod vendor`, validates component builds, then starts Docker
+- `make run-down` — stop services started by `make run`
+- `make run-logs` — follow logs for services started by `make run`
 
 ## Broker
 
