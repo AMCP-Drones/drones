@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/AMCP-Drones/drones/src/delivery"
+	"github.com/AMCP-Drones/drones/components/delivery/src"
 	"github.com/AMCP-Drones/drones/tests/testutil"
 )
 

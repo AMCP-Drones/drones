@@ -10,17 +10,17 @@ Multi-component delivery drone system on a shared broker, with delivery-specific
 
 | Component         | Role                          | Implementation        |
 |------------------|-------------------------------|------------------------|
-| delivery_drone   | Main delivery logic, health   | Full (cmd/delivery_drone) |
-| security_monitor | Policy gateway, proxy_request/proxy_publish, isolation | Full (cmd/security_monitor) |
-| journal          | Append-only event log (LOG_EVENT, NDJSON) | Full (cmd/journal) |
-| navigation       | Nav state (mock/SITL), get_state | Full (cmd/navigation) |
-| mission_handler  | WPL/JSON missions, validate, send to autopilot | Full (cmd/mission_handler) |
-| autopilot        | Control loop, motors + cargo  | Full (cmd/autopilot)   |
-| limiter          | Geofence, limiter_event to emergency | Full (cmd/limiter) |
-| emergency        | Emergency protocol (isolation, LAND, cargo close) | Full (cmd/emergency) |
-| motors           | SET_TARGET, LAND, get_state, SITL commands | Full (cmd/motors) |
-| cargo            | OPEN/CLOSE, get_state         | Full (cmd/cargo)      |
-| telemetry        | Aggregate motors + cargo state | Full (cmd/telemetry)  |
+| delivery_drone   | Main delivery logic, health   | Full (`components/delivery_drone/cmd/delivery_drone`) |
+| security_monitor | Policy gateway, proxy_request/proxy_publish, isolation | Full (`components/security_monitor/cmd/security_monitor`) |
+| journal          | Append-only event log (LOG_EVENT, NDJSON) | Full (`components/journal/cmd/journal`) |
+| navigation       | Nav state (mock/SITL), get_state | Full (`components/navigation/cmd/navigation`) |
+| mission_handler  | WPL/JSON missions, validate, send to autopilot | Full (`components/mission_handler/cmd/mission_handler`) |
+| autopilot        | Control loop, motors + cargo  | Full (`components/autopilot/cmd/autopilot`)   |
+| limiter          | Geofence, limiter_event to emergency | Full (`components/limiter/cmd/limiter`) |
+| emergency        | Emergency protocol (isolation, LAND, cargo close) | Full (`components/emergency/cmd/emergency`) |
+| motors           | SET_TARGET, LAND, get_state, SITL commands | Full (`components/motors/cmd/motors`) |
+| cargo            | OPEN/CLOSE, get_state         | Full (`components/cargo/cmd/cargo`)      |
+| telemetry        | Aggregate motors + cargo state | Full (`components/telemetry/cmd/telemetry`)  |
 
 All components use the shared bus (Kafka or MQTT) with the security_monitor policy gateway (`proxy_request` / `proxy_publish`, isolation) and journal `LOG_EVENT`.
 

@@ -3,7 +3,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/AMCP-Drones/drones/src/sdk"
+	"github.com/AMCP-Drones/drones/components/sdk/src"
 )
 
 func TestUnit_SDK_CreateResponseShape(t *testing.T) {

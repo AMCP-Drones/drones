@@ -103,8 +103,8 @@ def prepare_system(system_dir: str):
     deliverydron_defaults = parse_env_file(system_path / "deliverydron.env")
     system_local_overrides = parse_env_file(system_path / ".env")
 
-    # Discover components: prefer src/<name>/.env, else src/<name>/<name>.env
-    components_dir = system_path / "src"
+    # Discover components: prefer components/<name>/.env, else components/<name>/<name>.env
+    components_dir = root / "components"
     component_envs = {}
     if components_dir.is_dir():
         for comp_dir in sorted(components_dir.iterdir()):
@@ -207,11 +207,13 @@ def prepare_system(system_dir: str):
             if isinstance(build, dict):
                 if "context" in build:
                     build["context"] = rewrite_path(build["context"], system_dir_abs, output_dir)
-                # Dockerfile path: from project dir (.generated) point to ../src/...
+                # Dockerfile path: from .generated/ either ../ (legacy system src) or ../../components/...
                 if "dockerfile" in build:
                     df = build["dockerfile"]
                     if df.startswith(system_dir_prefix):
                         build["dockerfile"] = "../" + df[len(system_dir_prefix):]
+                    elif df.startswith("components/"):
+                        build["dockerfile"] = rewrite_path(df, root, output_dir)
 
         # Add depends_on for broker health checks
         existing_depends = svc.get("depends_on", {})
