@@ -6,9 +6,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/AMCP-Drones/drones/src/cargo"
-	"github.com/AMCP-Drones/drones/src/journal"
-	securitymonitor "github.com/AMCP-Drones/drones/src/security_monitor"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/cargo/src"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/journal/src"
+	securitymonitor "github.com/AMCP-Drones/drones/systems/deliverydron/security_monitor/src"
 	"github.com/AMCP-Drones/drones/tests/testutil"
 )
 

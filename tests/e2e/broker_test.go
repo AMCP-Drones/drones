@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AMCP-Drones/drones/src/bus"
-	"github.com/AMCP-Drones/drones/src/config"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/bus/src"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/config/src"
 )
 
 // TestE2E_KafkaPubSub requires a running Kafka broker (e.g. docker compose from docker/).

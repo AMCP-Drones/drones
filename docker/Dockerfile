@@ -7,7 +7,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 COPY vendor/ vendor/
 COPY . .
-RUN CGO_ENABLED=0 go build -mod=vendor -o /delivery-drone ./cmd/delivery_drone
+RUN CGO_ENABLED=0 go build -mod=vendor -o /delivery-drone ./systems/deliverydron/delivery_drone/cmd/delivery_drone
 
 FROM alpine:3.19
 RUN apk --no-cache add ca-certificates

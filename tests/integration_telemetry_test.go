@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AMCP-Drones/drones/src/cargo"
-	"github.com/AMCP-Drones/drones/src/motors"
-	securitymonitor "github.com/AMCP-Drones/drones/src/security_monitor"
-	"github.com/AMCP-Drones/drones/src/telemetry"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/cargo/src"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/motors/src"
+	securitymonitor "github.com/AMCP-Drones/drones/systems/deliverydron/security_monitor/src"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/telemetry/src"
 	"github.com/AMCP-Drones/drones/tests/testutil"
 )
 

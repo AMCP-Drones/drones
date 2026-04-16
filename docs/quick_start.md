@@ -6,9 +6,9 @@ Go implementation of a multi-component **delivery drone** system on Kafka or MQT
 
 | Path | Purpose |
 |------|---------|
-| `cmd/<component>/` | Binaries for each on-board component |
-| `src/` | Shared packages (`bus`, `config`, `component`, component logic) |
-| `systems/deliverydron/` | Docker Compose for the full system + per-component Dockerfiles under `src/` |
+| `systems/deliverydron/<component>/cmd/<component>/` | `main` package for each on-board component binary |
+| `systems/deliverydron/<component>/src/` | Go package code (shared crates like `bus`, `config`, `component` live under their own `systems/deliverydron/<name>/src/`) |
+| `systems/deliverydron/` | Docker Compose for the full system; images build from `systems/deliverydron/<component>/docker/` |
 | `docker/` | Broker stack (Kafka / Mosquitto) merged by `scripts/prepare_system.py` |
 | `scripts/prepare_system.py` | Merges broker + system compose and builds `.generated/docker-compose.yml` and `.env` |
 | `docs/` | System and API documentation |

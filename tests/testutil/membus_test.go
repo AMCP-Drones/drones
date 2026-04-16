@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AMCP-Drones/drones/src/bus"
-	"github.com/AMCP-Drones/drones/src/sdk"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/bus/src"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/sdk/src"
 )
 
 func TestMemoryBus_RequestResponse(t *testing.T) {

@@ -29,4 +29,4 @@ unit-test:
 	@cd ../.. && go test ./... -v -count=1
 
 build:
-	@cd ../.. && go build -o /dev/null ./cmd/delivery_drone ./cmd/stub_component
+	@cd ../.. && go build -o /dev/null ./systems/deliverydron/delivery_drone/cmd/delivery_drone ./systems/deliverydron/stub_component/cmd/stub_component

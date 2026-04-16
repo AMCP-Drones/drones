@@ -3,7 +3,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/AMCP-Drones/drones/src/config"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/config/src"
 )
 
 func TestUnit_Config_TopicPrefixAndBrokerTopic(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/AMCP-Drones/drones/src/journal"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/journal/src"
 	"github.com/AMCP-Drones/drones/tests/testutil"
 )
 

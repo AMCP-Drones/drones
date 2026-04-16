@@ -4,7 +4,7 @@
 
 This repository implements an on-board **delivery UAS** as a set of processes that communicate **only through a message broker** (Kafka or MQTT). Cross-component traffic is mediated by a **security monitor**: it enforces allow-lists of `(sender, target_topic, action)` and exposes `proxy_request` / `proxy_publish` so peers do not talk to each other directly without policy checks.
 
-Delivery-specific choices in this stack include **cargo** bay control (`OPEN` / `CLOSE`) instead of a crop sprayer, an **`emergency`** component (not `emergensy`), and an optional **`delivery_drone`** service for platform-facing APIs and health checks alongside **`autopilot`**. External ATM / GCS / droneport dialogue on mission start is not implemented in `src/autopilot` today (extension point).
+Delivery-specific choices in this stack include **cargo** bay control (`OPEN` / `CLOSE`) instead of a crop sprayer, an **`emergency`** component (not `emergensy`), and an optional **`delivery_drone`** service for platform-facing APIs and health checks alongside **`autopilot`**. External ATM / GCS / droneport dialogue on mission start is not implemented in `systems/deliverydron/autopilot/src` today (extension point).
 
 ### 1.1 Topic format
 
@@ -44,7 +44,7 @@ JSON messages carry at least:
 }
 ```
 
-For request/response, the bus adds `correlation_id` and `reply_to` (implementation detail of `src/bus`).
+For request/response, the bus adds `correlation_id` and `reply_to` (implementation detail of `systems/deliverydron/bus/src`).
 
 **Note:** This codebase mixes **lowercase** actions (`get_state`, `mission_load`, `limiter_event`) with **uppercase** actuator-style actions (`SET_TARGET`, `LAND`, `LOG_EVENT`, `LOAD_MISSION`, `OPEN`, `CLOSE`). Policies must match the exact string used by the producer.
 
@@ -66,7 +66,7 @@ Components that only accept commands from the security monitor check that `sende
 | `emergency` | `emergency` | `limiter_event` → isolation + safe state (cargo close, motors land, journal) |
 | `telemetry` | `telemetry` | Aggregates motors + cargo via proxy |
 | `journal` | `journal` | Append-only `LOG_EVENT` to NDJSON file |
-| `delivery_drone` | `delivery_drone` | Platform-facing binary (`cmd/delivery_drone`): health HTTP, broker handlers (`echo`, `deliver_package`, …) |
+| `delivery_drone` | `delivery_drone` | Platform-facing binary (`systems/deliverydron/delivery_drone/cmd/delivery_drone`): health HTTP, broker handlers (`echo`, `deliver_package`, …) |
 
 ---
 
@@ -133,7 +133,7 @@ Limiter detects a breach and can publish to `…emergency` (direct broker publis
 | `docker/example.env` | Broker + default `TOPIC_VERSION` / `SYSTEM_NAME` / `INSTANCE_ID` |
 | `systems/deliverydron/deliverydron.env` | Committed system-wide topic defaults (`TOPIC_VERSION`, `SYSTEM_NAME`, `INSTANCE_ID`) |
 | `systems/deliverydron/.env` | Optional local overrides (gitignored filename) |
-| `systems/deliverydron/src/<component>/.env` or `<component>.env` | Per-component vars; merged as `<PREFIX>_<KEY>` in `.generated/.env` |
+| `systems/deliverydron/<component>/.env` or `<component>.env` (e.g. `security_monitor.env`) | Per-component vars; merged as `<PREFIX>_<KEY>` in `.generated/.env` |
 | `systems/deliverydron/.generated/*` | **Generated** — run `make prepare` |
 
 ```bash
@@ -150,9 +150,9 @@ Motor commands default to a **flat** topic `sitl.commands` (typical for a simula
 
 ## 7. Implementation notes
 
-- **Language / runtime:** Go; broker adapters in `src/bus` (Kafka and MQTT).
+- **Language / runtime:** Go; broker adapters in `systems/deliverydron/bus/src` (Kafka and MQTT).
 - **Topics:** Hierarchical defaults `v1.deliverydron.Delivery001.<component>`; override per deployment via env.
-- **External ATM / GCS integration:** Extension points in [EXTERNAL_API.md](EXTERNAL_API.md); not wired in `src/autopilot` today.
+- **External ATM / GCS integration:** Extension points in [EXTERNAL_API.md](EXTERNAL_API.md); not wired in `systems/deliverydron/autopilot/src` today.
 - **Action naming:** Mixed case (`SET_TARGET`, `LOAD_MISSION`, `get_state`, …). Policies must use the exact action strings this codebase emits.
 
 ---
@@ -161,12 +161,13 @@ Motor commands default to a **flat** topic `sitl.commands` (typical for a simula
 
 ```text
 systems/deliverydron/
+  <component>/src/                 # Go packages
+  <component>/cmd/<component>/      # main binaries
+  <component>/docker/Dockerfile     # Service images
+systems/deliverydron/
   docker-compose.yml       # Component services (broker merged by prepare)
   .env                     # Optional system-wide topic defaults
   .generated/              # Output of prepare_system.py
-  src/
-    <component>/docker/Dockerfile
-    security_monitor/security_monitor.env  # Default SECURITY_POLICIES with ${SYSTEM_NAME} placeholders
 ```
 
 Root `Makefile` targets: `prepare`, `system-up`, `system-down`, `unit-test`, `vendor`.
