@@ -1,3 +1,19 @@
+# github.com/AMCP-Drones/drones/systems/deliverydron v0.0.0 => ./systems/deliverydron
+## explicit; go 1.21
+github.com/AMCP-Drones/drones/systems/deliverydron/bus/src
+github.com/AMCP-Drones/drones/systems/deliverydron/bus/src/kafka
+github.com/AMCP-Drones/drones/systems/deliverydron/bus/src/mqtt
+github.com/AMCP-Drones/drones/systems/deliverydron/cargo/src
+github.com/AMCP-Drones/drones/systems/deliverydron/component/src
+github.com/AMCP-Drones/drones/systems/deliverydron/config/src
+github.com/AMCP-Drones/drones/systems/deliverydron/delivery/src
+github.com/AMCP-Drones/drones/systems/deliverydron/journal/src
+github.com/AMCP-Drones/drones/systems/deliverydron/mission_handler/src
+github.com/AMCP-Drones/drones/systems/deliverydron/motors/src
+github.com/AMCP-Drones/drones/systems/deliverydron/navigation/src
+github.com/AMCP-Drones/drones/systems/deliverydron/sdk/src
+github.com/AMCP-Drones/drones/systems/deliverydron/security_monitor/src
+github.com/AMCP-Drones/drones/systems/deliverydron/telemetry/src
 # github.com/IBM/sarama v1.43.3
 ## explicit; go 1.19
 github.com/IBM/sarama
@@ -111,3 +127,4 @@ golang.org/x/net/proxy
 # golang.org/x/sync v0.8.0
 ## explicit; go 1.18
 golang.org/x/sync/semaphore
+# github.com/AMCP-Drones/drones/systems/deliverydron => ./systems/deliverydron
