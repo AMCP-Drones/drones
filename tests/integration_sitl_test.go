@@ -1179,6 +1179,7 @@ func TestSITL_R007_TelemetryFeedback(t *testing.T) {
 }
 
 func TestSITL_R008_HomeRequired(t *testing.T) {
+
 	separator("SITL-R-008: HOME + COMMAND — проверка игнорирования команды без HOME")
 	setupEnv()
 	defer cleanupEnv()
@@ -1282,13 +1283,13 @@ func TestSITL_R008_HomeRequired(t *testing.T) {
 	homeDroneID := fmt.Sprintf("drone_%03d", time.Now().UnixNano()%1000)
 	homeLat, homeLon, homeAlt := 55.7558, 37.6173, 0.0
 
-	err = b.Publish(ctx, "sitl-drone-home", map[string]interface{}{
+	publishErr := b.Publish(ctx, "sitl-drone-home", map[string]interface{}{
 		"drone_id": homeDroneID,
 		"home_lat": homeLat,
 		"home_lon": homeLon,
 		"home_alt": homeAlt,
 	})
-	checkPass(t, err == nil, "HOME отправлен", fmt.Sprintf("drone_id=%s", homeDroneID))
+	checkPass(t, publishErr == nil, "HOME отправлен", fmt.Sprintf("drone_id=%s", homeDroneID))
 
 	time.Sleep(500 * time.Millisecond)
 
