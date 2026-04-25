@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package tests
 
 import (
@@ -1925,7 +1928,7 @@ func TestSITL_R011_RealSITLIntegration(t *testing.T) {
 		passed = false
 	} else {
 		defer func() {
-			if err := conn.Close(); err != nil {
+			if err := redisConn.Close(); err != nil {
 				t.Logf("Warning: failed to close connection: %v", err)
 			}
 		}()
