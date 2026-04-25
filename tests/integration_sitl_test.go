@@ -750,7 +750,7 @@ func TestSITL_R005_MultipleCommands(t *testing.T) {
 		fmt.Sprintf("ожидалось: %d", N))
 
 	if len(msgs) != N {
-		t.Logf("Error: %v", err)
+		t.Logf("Expected %d messages but got %d", N, len(msgs))
 		passed = false
 	}
 
