@@ -36,13 +36,21 @@ func mqttCfg(id string) *config.Config {
 }
 
 func setupEnv() {
-	os.Setenv("SITL_MODE", "mock")
-	os.Setenv("SITL_COMMANDS_TOPIC", "sitl.commands")
+	if err := os.Setenv("SITL_MODE", "mock"); err != nil {
+		panic(fmt.Sprintf("failed to set SITL_MODE: %v", err))
+	}
+	if err := os.Setenv("SITL_COMMANDS_TOPIC", "sitl.commands"); err != nil {
+		panic(fmt.Sprintf("failed to set SITL_COMMANDS_TOPIC: %v", err))
+	}
 }
 
 func cleanupEnv() {
-	os.Unsetenv("SITL_MODE")
-	os.Unsetenv("SITL_COMMANDS_TOPIC")
+	if err := os.Unsetenv("SITL_MODE"); err != nil {
+		panic(fmt.Sprintf("failed to unset SITL_MODE: %v", err))
+	}
+	if err := os.Unsetenv("SITL_COMMANDS_TOPIC"); err != nil {
+		panic(fmt.Sprintf("failed to unset SITL_COMMANDS_TOPIC: %v", err))
+	}
 }
 
 func separator(title string) {
@@ -143,7 +151,11 @@ func (fa *FormatAdapter) Start(ctx context.Context) error {
 				"vz":          payload["vz"],
 				"mag_heading": payload["heading_deg"],
 			}
-			fa.bus.Publish(ctx, "sitl.commands", sitlCmd)
+
+			if err := fa.bus.Publish(ctx, "sitl.commands", sitlCmd); err != nil {
+
+				fmt.Printf("Warning: failed to publish to sitl.commands: %v\n", err)
+			}
 		case "LAND":
 			sitlCmd := map[string]interface{}{
 				"drone_id":    fa.droneID,
@@ -152,62 +164,11 @@ func (fa *FormatAdapter) Start(ctx context.Context) error {
 				"vz":          -0.5,
 				"mag_heading": 0.0,
 			}
-			fa.bus.Publish(ctx, "sitl.commands", sitlCmd)
+			if err := fa.bus.Publish(ctx, "sitl.commands", sitlCmd); err != nil {
+				fmt.Printf("Warning: failed to publish LAND to sitl.commands: %v\n", err)
+			}
 		}
 	})
-}
-
-func (fa *FormatAdapter) convertCommand(motorsMsg map[string]interface{}) map[string]interface{} {
-	source, _ := motorsMsg["source"].(string)
-	if source != "motors" {
-		return nil
-	}
-
-	command, ok := motorsMsg["command"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	cmdType, _ := command["cmd"].(string)
-	if cmdType == "" {
-		return nil
-	}
-
-	sitlCmd := map[string]interface{}{
-		"drone_id": fa.droneID,
-	}
-
-	switch cmdType {
-	case "SET_TARGET":
-		target, ok := command["target"].(map[string]interface{})
-		if !ok {
-			return nil
-		}
-
-		if vx, ok := target["vx"]; ok {
-			sitlCmd["vx"] = vx
-		}
-		if vy, ok := target["vy"]; ok {
-			sitlCmd["vy"] = vy
-		}
-		if vz, ok := target["vz"]; ok {
-			sitlCmd["vz"] = vz
-		}
-		if heading, ok := target["heading_deg"]; ok {
-			sitlCmd["mag_heading"] = heading
-		}
-
-	case "LAND":
-		sitlCmd["vx"] = 0.0
-		sitlCmd["vy"] = 0.0
-		sitlCmd["vz"] = -0.5
-		sitlCmd["mag_heading"] = 0.0
-
-	default:
-		return nil
-	}
-
-	return sitlCmd
 }
 
 func TestSITL_R001_MotorsCommands(t *testing.T) {
@@ -269,6 +230,7 @@ func TestSITL_R001_MotorsCommands(t *testing.T) {
 	})
 	checkPass(t, err == nil, "SET_TARGET отправлен", "")
 	if err != nil {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -285,6 +247,7 @@ func TestSITL_R001_MotorsCommands(t *testing.T) {
 	source, _ := cmd["source"].(string)
 	checkPass(t, source == "motors", "source = motors", fmt.Sprintf("получено: %q", source))
 	if source != "motors" {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -298,6 +261,7 @@ func TestSITL_R001_MotorsCommands(t *testing.T) {
 	cmdType, _ := command["cmd"].(string)
 	checkPass(t, cmdType == "SET_TARGET", "cmd = SET_TARGET", fmt.Sprintf("получено: %q", cmdType))
 	if cmdType != "SET_TARGET" {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -313,9 +277,11 @@ func TestSITL_R001_MotorsCommands(t *testing.T) {
 		checkPass(t, vz == 1.0, "vz = 1.0", fmt.Sprintf("получено: %.1f", vz))
 		checkPass(t, alt == 100.0, "alt_m = 100.0", fmt.Sprintf("получено: %.1f", alt))
 		if vx != 5.0 || vy != 3.0 || vz != 1.0 || alt != 100.0 {
+			t.Logf("Error: %v", err)
 			passed = false
 		}
 	} else {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -378,6 +344,7 @@ func TestSITL_R002_LandCommand(t *testing.T) {
 	})
 	checkPass(t, err == nil, "LAND отправлен", "")
 	if err != nil {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -400,6 +367,7 @@ func TestSITL_R002_LandCommand(t *testing.T) {
 	cmdType, _ := command["cmd"].(string)
 	checkPass(t, cmdType == "LAND", "cmd = LAND", fmt.Sprintf("получено: %q", cmdType))
 	if cmdType != "LAND" {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -480,6 +448,7 @@ func TestSITL_R003_FullFlightCycle(t *testing.T) {
 		})
 		checkPass(t, err == nil, s.name, fmt.Sprintf("vx=%.0f,vy=%.0f,vz=%.0f,alt=%.0f", s.vx, s.vy, s.vz, s.alt))
 		if err != nil {
+			t.Logf("Error: %v", err)
 			passed = false
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -492,6 +461,7 @@ func TestSITL_R003_FullFlightCycle(t *testing.T) {
 	})
 	checkPass(t, err == nil, "LAND", "")
 	if err != nil {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -505,6 +475,7 @@ func TestSITL_R003_FullFlightCycle(t *testing.T) {
 		fmt.Sprintf("%d команд получено", len(msgs)),
 		fmt.Sprintf("получено: %d", len(msgs)))
 	if len(msgs) != expected {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -524,6 +495,7 @@ func TestSITL_R003_FullFlightCycle(t *testing.T) {
 	}
 	checkPass(t, lastCmd == "LAND", fmt.Sprintf("Последняя команда = %s", lastCmd), fmt.Sprintf("получено: %s", lastCmd))
 	if lastCmd != "LAND" {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -628,6 +600,7 @@ func TestSITL_R004_NavigationCoords(t *testing.T) {
 	})
 	checkPass(t, err == nil, "nav_state отправлен", "")
 	if err != nil {
+		t.Logf("Error: %v", err)
 		passed = false
 		printTestStatus("SITL-R-004", false)
 		return
@@ -699,6 +672,7 @@ func TestSITL_R004_NavigationCoords(t *testing.T) {
 		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testAlt, alt))
 
 	if !latOk || !lonOk || !altOk {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -776,6 +750,7 @@ func TestSITL_R005_MultipleCommands(t *testing.T) {
 		fmt.Sprintf("ожидалось: %d", N))
 
 	if len(msgs) != N {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -870,6 +845,7 @@ func TestSITL_R006_LimiterProxyRequest(t *testing.T) {
 	})
 	checkPass(t, err == nil, "nav_state отправлен", "")
 	if err != nil {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -889,6 +865,7 @@ func TestSITL_R006_LimiterProxyRequest(t *testing.T) {
 
 	checkPass(t, err == nil, "proxy_request выполнен", "")
 	if err != nil {
+		t.Logf("Error: %v", err)
 		passed = false
 		printTestStatus("SITL-R-006", false)
 		return
@@ -897,6 +874,7 @@ func TestSITL_R006_LimiterProxyRequest(t *testing.T) {
 	pl, ok := resp["payload"].(map[string]interface{})
 	checkPass(t, ok, "payload присутствует в ответе", "")
 	if !ok || pl == nil {
+		t.Logf("Error: %v", err)
 		passed = false
 		printTestStatus("SITL-R-006", false)
 		return
@@ -915,6 +893,7 @@ func TestSITL_R006_LimiterProxyRequest(t *testing.T) {
 
 		checkPass(t, false, "target_response присутствует",
 			"security_monitor вернул эхо-ответ вместо проксированного")
+		t.Logf("Error: %v", err)
 		passed = false
 	} else if tr, hasTr := pl["target_response"].(map[string]interface{}); hasTr {
 
@@ -937,10 +916,12 @@ func TestSITL_R006_LimiterProxyRequest(t *testing.T) {
 				fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testAlt, alt))
 
 			if !latOk || !lonOk || !altOk {
+				t.Logf("Error: %v", err)
 				passed = false
 			}
 		} else {
 			checkPass(t, false, "target_response.payload не пустой", "payload пустой")
+			t.Logf("Error: %v", err)
 			passed = false
 		}
 	} else {
@@ -951,6 +932,7 @@ func TestSITL_R006_LimiterProxyRequest(t *testing.T) {
 		}
 		fmt.Println()
 		checkPass(t, false, "формат ответа", "не содержит target_response и не является эхо-ответом")
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -1042,6 +1024,7 @@ func TestSITL_R007_TelemetryFeedback(t *testing.T) {
 	})
 	checkPass(t, err == nil, "SET_TARGET отправлен", "")
 	if err != nil {
+		t.Logf("Error: %v", err)
 		passed = false
 		printTestStatus("SITL-R-007", false)
 		return
@@ -1091,6 +1074,7 @@ func TestSITL_R007_TelemetryFeedback(t *testing.T) {
 	})
 	checkPass(t, err == nil, "nav_state (эмуляция SITL) отправлен", "")
 	if err != nil {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -1158,6 +1142,7 @@ func TestSITL_R007_TelemetryFeedback(t *testing.T) {
 		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", simulatedAlt, navAlt))
 
 	if !latOk || !lonOk || !altOk {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -1176,6 +1161,7 @@ func TestSITL_R007_TelemetryFeedback(t *testing.T) {
 		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testAlt, targetAlt))
 
 	if targetVx != testVx || targetVy != testVy || targetVz != testVz || targetAlt != testAlt {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -1510,6 +1496,7 @@ func TestSITL_R009_LimiterGeofenceEmergency(t *testing.T) {
 	select {
 	case <-emergencyCh:
 		checkPass(t, false, "Emergency НЕ сработал на нормальных координатах", "сработал ложно!")
+		t.Logf("Error: %v", err)
 		passed = false
 	case <-time.After(500 * time.Millisecond):
 		fmt.Println("  Emergency не сработал (координаты в норме)")
@@ -1755,6 +1742,7 @@ func TestSITL_R010_InvalidCommands(t *testing.T) {
 	checkPass(t, !unknownCmdSent, "FLY_TO_MOON не отправлен в SITL",
 		"неизвестный action должен игнорироваться")
 	if unknownCmdSent {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -1797,6 +1785,7 @@ func TestSITL_R010_InvalidCommands(t *testing.T) {
 	if pingResp != nil {
 		fmt.Println("  motors жив после 50 невалидных команд")
 	} else {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -1831,9 +1820,12 @@ func TestSITL_R011_RealSITLIntegration(t *testing.T) {
 	if err != nil {
 		fmt.Println("  ⚠️ Redis недоступен — SITL-модуль не запущен?")
 		fmt.Println("  Для полного теста запустите: cd SITL-module && make up-kafka")
+		t.Logf("Error: %v", err)
 		passed = false
 	} else {
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			t.Logf("Warning: failed to close connection: %v", err)
+		}
 		fmt.Println("  Redis доступен")
 	}
 
@@ -1879,6 +1871,7 @@ func TestSITL_R011_RealSITLIntegration(t *testing.T) {
 		fmt.Println("  HOME принят SITL")
 	case <-time.After(5 * time.Second):
 		checkPass(t, false, "HOME верифицирован", "таймаут — SITL verifier не отвечает")
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -1909,10 +1902,12 @@ func TestSITL_R011_RealSITLIntegration(t *testing.T) {
 		checkPass(t, cmdDrone == droneID, "drone_id корректен", fmt.Sprintf("ожидалось: %s, получено: %s", droneID, cmdDrone))
 
 		if cmdVx != testVx || cmdVy != testVy || cmdVz != testVz || cmdDrone != droneID {
+			t.Logf("Error: %v", err)
 			passed = false
 		}
 	case <-time.After(5 * time.Second):
 		checkPass(t, false, "Команда верифицирована", "таймаут")
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -1925,9 +1920,14 @@ func TestSITL_R011_RealSITLIntegration(t *testing.T) {
 	redisConn, redisErr := net.DialTimeout("tcp", redisURL, 2*time.Second)
 	if redisErr != nil {
 		checkPass(t, false, "Подключение к Redis", redisErr.Error())
+		t.Logf("Error: %v", err)
 		passed = false
 	} else {
-		defer redisConn.Close()
+		defer func() {
+			if err := conn.Close(); err != nil {
+				t.Logf("Warning: failed to close connection: %v", err)
+			}
+		}()
 
 		for _, cmd := range []string{"HGETALL", "GET"} {
 			var redisCmd string
@@ -2001,16 +2001,19 @@ func TestSITL_R011_RealSITLIntegration(t *testing.T) {
 					fmt.Sprintf("home: (%.4f,%.4f,%.1f) current: (%.4f,%.4f,%.1f)",
 						homeLat, homeLon, homeAlt, lat, lon, alt))
 				if !moved {
+					t.Logf("Error: %v", err)
 					passed = false
 				}
 			}
 
 			if !hasCoords {
+				t.Logf("Error: %v", err)
 				passed = false
 			}
 		}
 	case <-time.After(10 * time.Second):
 		checkPass(t, false, "Ответ телеметрии получен", "таймаут — проверьте SITL messaging и Redis")
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -2117,10 +2120,12 @@ func TestSITL_R012_FormatAdapter(t *testing.T) {
 		checkPass(t, sitlHeading == 45.0, "mag_heading = 45.0", fmt.Sprintf("получено: %.1f", sitlHeading))
 
 		if sitlVx != 10.0 || sitlVy != 5.0 || sitlVz != 2.0 || sitlHeading != 45.0 {
+			t.Logf("Error: %v", err)
 			passed = false
 		}
 	case <-time.After(3 * time.Second):
 		checkPass(t, false, "Адаптер отправил команду в SITL", "таймаут")
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -2151,10 +2156,12 @@ func TestSITL_R012_FormatAdapter(t *testing.T) {
 			fmt.Sprintf("получено: %.1f", sitlVz))
 
 		if sitlVz != -0.5 {
+			t.Logf("Error: %v", err)
 			passed = false
 		}
 	case <-time.After(3 * time.Second):
 		checkPass(t, false, "Адаптер отправил LAND в SITL", "таймаут")
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -2175,6 +2182,7 @@ func TestSITL_R012_FormatAdapter(t *testing.T) {
 	select {
 	case <-sitlCh:
 		checkPass(t, false, "Неизвестная команда игнорируется", "команда попала в SITL!")
+		t.Logf("Error: %v", err)
 		passed = false
 	case <-time.After(1 * time.Second):
 		checkPass(t, true, "Неизвестная команда проигнорирована", "")
@@ -2272,10 +2280,12 @@ func TestSITL_R013_EndToEndWithAdapter(t *testing.T) {
 		checkPass(t, cmdDrone == droneID, "drone_id корректен", "")
 
 		if cmdVx != 10.0 || cmdVy != 5.0 || cmdVz != 2.0 {
+			t.Logf("Error: %v", err)
 			passed = false
 		}
 	case <-time.After(5 * time.Second):
 		checkPass(t, false, "Команда верифицирована", "таймаут — проверьте адаптер")
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
@@ -2301,7 +2311,6 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 	}
 	defer b.Stop(ctx)
 
-	// Каналы для перехвата
 	sitlCh := make(chan map[string]interface{}, 20)
 	journalCh := make(chan map[string]interface{}, 20)
 
@@ -2315,13 +2324,11 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 		journalCh <- msg
 	})
 
-	// Конфиги для компонентов
 	motorsTopic := prefix + ".motors"
 	cargoTopic := prefix + ".cargo"
 	emergencyTopic := prefix + ".emergency"
 	journalCompTopic := journalTopic
 
-	// Запуск всех компонентов
 	mc := &config.Config{
 		BrokerType:     "mqtt",
 		ComponentID:    "motors_r14",
@@ -2408,7 +2415,6 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	// Тест 1: Motors — SET_TARGET от hacker
 	fmt.Println("  --- Тест 1: Motors SET_TARGET от hacker ---")
 	drainChannel(sitlCh)
 
@@ -2428,12 +2434,12 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 	case msg := <-sitlCh:
 		checkPass(t, false, "SITL НЕ получил команду от hacker",
 			fmt.Sprintf("получено: %+v", msg))
+		t.Logf("Error: %v", err)
 		passed = false
 	case <-time.After(500 * time.Millisecond):
 		checkPass(t, true, "SITL НЕ получил команду от hacker", "")
 	}
 
-	// Контрольная проверка: motors работает с security_monitor
 	drainChannel(sitlCh)
 
 	err = b.Publish(ctx, motorsTopic, map[string]interface{}{
@@ -2451,17 +2457,15 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 		checkPass(t, true, "Motors работает с security_monitor", "")
 	case <-time.After(2 * time.Second):
 		checkPass(t, false, "Motors работает с security_monitor", "таймаут — компонент не отвечает")
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
-	// Тест 2: Cargo — OPEN от intruder
 	fmt.Println()
 	fmt.Println("  --- Тест 2: Cargo OPEN от intruder ---")
 
-	// Сначала проверим, что cargo отвечает на get_state от security_monitor
 	drainChannel(journalCh)
 
-	// Диагностический запрос: проверяем, что cargo вообще отвечает
 	fmt.Println("  Диагностика cargo get_state...")
 	cargoDiagResp, cargoDiagErr := b.Request(ctx, cargoTopic, map[string]interface{}{
 		"action":  "get_state",
@@ -2471,7 +2475,7 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 
 	if cargoDiagErr != nil {
 		fmt.Printf("  ⚠️ cargo не отвечает на get_state: %v\n", cargoDiagErr)
-		// Попробуем ping для проверки живучести
+
 		cargoPingResp, cargoPingErr := b.Request(ctx, cargoTopic, map[string]interface{}{
 			"action":  "ping",
 			"sender":  "security_monitor",
@@ -2484,7 +2488,7 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 		}
 	} else {
 		fmt.Printf("  cargo get_state ответ: %+v\n", cargoDiagResp)
-		// Проверим структуру ответа
+
 		if pl, ok := cargoDiagResp["payload"].(map[string]interface{}); ok {
 			fmt.Printf("  payload ключи: ")
 			for k := range pl {
@@ -2502,7 +2506,6 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 		}
 	}
 
-	// Отправляем OPEN от intruder
 	err = b.Publish(ctx, cargoTopic, map[string]interface{}{
 		"action":  "OPEN",
 		"sender":  "intruder",
@@ -2512,7 +2515,6 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 
 	time.Sleep(300 * time.Millisecond)
 
-	// Проверяем состояние cargo
 	cargoResp, cargoErr := b.Request(ctx, cargoTopic, map[string]interface{}{
 		"action":  "get_state",
 		"sender":  "security_monitor",
@@ -2534,22 +2536,22 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 		"Cargo не открылся от intruder",
 		fmt.Sprintf("состояние: %q", cargoState))
 	if cargoState != "CLOSED" {
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
-	// Проверяем, что journal не получил LOG_EVENT от cargo
 	select {
 	case jmsg := <-journalCh:
 		payload, _ := jmsg["payload"].(map[string]interface{})
 		event, _ := payload["event"].(string)
 		checkPass(t, false, "Cargo НЕ логирует OPEN от intruder",
 			fmt.Sprintf("событие: %s", event))
+		t.Logf("Error: %v", err)
 		passed = false
 	case <-time.After(500 * time.Millisecond):
 		checkPass(t, true, "Cargo НЕ логирует OPEN от intruder", "")
 	}
 
-	// Тест 3: Emergency — limiter_event от unknown
 	fmt.Println()
 	fmt.Println("  --- Тест 3: Emergency limiter_event от unknown ---")
 
@@ -2582,14 +2584,15 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 			"Emergency не активировался от unknown",
 			fmt.Sprintf("active: %v", active))
 		if active {
+			t.Logf("Error: %v", err)
 			passed = false
 		}
 	} else {
 		checkPass(t, false, "Emergency get_state", emergencyErr.Error())
+		t.Logf("Error: %v", err)
 		passed = false
 	}
 
-	// Тест 4: Journal — LOG_EVENT от rogue_sender
 	fmt.Println()
 	fmt.Println("  --- Тест 4: Journal LOG_EVENT от rogue_sender ---")
 
@@ -2619,15 +2622,16 @@ func TestSITL_R014_UntrustedSenderRejected(t *testing.T) {
 		event, _ := payload["event"].(string)
 		checkPass(t, false, "Journal НЕ логирует от rogue_sender",
 			fmt.Sprintf("событие: %s", event))
+		t.Logf("Error: %v", err)
 		passed = false
 	case <-time.After(500 * time.Millisecond):
 		checkPass(t, true, "Journal НЕ логирует от rogue_sender", "")
 	}
 
-	// Проверка файла журнала
 	if data, err := os.ReadFile(journalPath); err == nil {
 		if strings.Contains(string(data), "MALICIOUS_EVENT") {
 			checkPass(t, false, "Файл журнала не содержит MALICIOUS_EVENT", "")
+			t.Logf("Error: %v", err)
 			passed = false
 		} else {
 			checkPass(t, true, "Файл журнала не содержит MALICIOUS_EVENT", "")
