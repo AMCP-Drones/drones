@@ -4,12 +4,16 @@ services:
   security_monitor:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/security_monitor/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/security_monitor/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${SECURITY_MONITOR_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${SECURITY_MONITOR_COMPONENT_ID:-security_monitor}
       - COMPONENT_TOPIC=${SECURITY_MONITOR_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -26,12 +30,16 @@ services:
   journal:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/journal/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/journal/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${JOURNAL_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${JOURNAL_COMPONENT_ID:-journal}
       - COMPONENT_TOPIC=${JOURNAL_COMPONENT_TOPIC:-}
       - JOURNAL_FILE_PATH=${JOURNAL_FILE_PATH:-/data/deliverydron_journal.ndjson}
@@ -49,12 +57,16 @@ services:
   navigation:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/navigation/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/navigation/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${NAVIGATION_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${NAVIGATION_COMPONENT_ID:-navigation}
       - COMPONENT_TOPIC=${NAVIGATION_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -69,12 +81,16 @@ services:
   mission_handler:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/mission_handler/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/mission_handler/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${MISSION_HANDLER_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${MISSION_HANDLER_COMPONENT_ID:-mission_handler}
       - COMPONENT_TOPIC=${MISSION_HANDLER_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -89,12 +105,16 @@ services:
   autopilot:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/autopilot/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/autopilot/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${AUTOPILOT_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${AUTOPILOT_COMPONENT_ID:-autopilot}
       - COMPONENT_TOPIC=${AUTOPILOT_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -109,12 +129,16 @@ services:
   limiter:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/limiter/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/limiter/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${LIMITER_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${LIMITER_COMPONENT_ID:-limiter}
       - COMPONENT_TOPIC=${LIMITER_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -129,12 +153,16 @@ services:
   emergency:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/emergency/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/emergency/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${EMERGENCY_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${EMERGENCY_COMPONENT_ID:-emergency}
       - COMPONENT_TOPIC=${EMERGENCY_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -149,12 +177,16 @@ services:
   motors:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/motors/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/motors/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${MOTORS_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${MOTORS_COMPONENT_ID:-motors}
       - COMPONENT_TOPIC=${MOTORS_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -169,12 +201,16 @@ services:
   cargo:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/cargo/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/cargo/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${CARGO_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${CARGO_COMPONENT_ID:-cargo}
       - COMPONENT_TOPIC=${CARGO_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -189,12 +225,16 @@ services:
   telemetry:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/telemetry/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/telemetry/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${TELEMETRY_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${TELEMETRY_COMPONENT_ID:-telemetry}
       - COMPONENT_TOPIC=${TELEMETRY_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}
@@ -209,12 +249,16 @@ services:
   delivery_drone:
     build:
       context: ../..
-      dockerfile: systems/deliverydron/delivery_drone/docker/Dockerfile
+      dockerfile: ${DELIVERYDRON_ROOT:-systems/deliverydron}/delivery_drone/docker/Dockerfile
+      args:
+        DELIVERYDRON_ROOT: ${DELIVERYDRON_ROOT:-systems/deliverydron}
     profiles: ["kafka", "mqtt"]
     environment:
       - TOPIC_VERSION=${TOPIC_VERSION:-v1}
       - INSTANCE_ID=${INSTANCE_ID:-Delivery001}
       - SYSTEM_NAME=${DELIVERY_DRONE_SYSTEM_NAME:-deliverydron}
+      - TOPIC_SCHEME=${TOPIC_SCHEME:-legacy}
+      - TOPIC_PREFIX=${TOPIC_PREFIX:-}
       - COMPONENT_ID=${DELIVERY_DRONE_COMPONENT_ID:-delivery_drone}
       - COMPONENT_TOPIC=${DELIVERY_DRONE_COMPONENT_TOPIC:-}
       - BROKER_TYPE=${BROKER_TYPE:-kafka}

@@ -4,7 +4,10 @@ Multi-component delivery drone system on a shared broker, with delivery-specific
 
 **Documentation (English):** see the repo root [`docs/`](../../docs/) — [`SYSTEM.md`](../../docs/SYSTEM.md), [`EXTERNAL_API.md`](../../docs/EXTERNAL_API.md), [`quick_start.md`](../../docs/quick_start.md).
 
-**Broker topics:** internal components default to `v1.deliverydron.Delivery001.<component>` via `TOPIC_VERSION`, `SYSTEM_NAME`, and `INSTANCE_ID` (see `docs/SYSTEM.md`).
+**Broker topics:** internal components support two schemes:
+- legacy (default): `v1.deliverydron.Delivery001.<component>` via `TOPIC_VERSION`, `SYSTEM_NAME`, `INSTANCE_ID`
+- monorepo-compatible: `components.<system>.<component>` via `TOPIC_SCHEME=components`
+- explicit override: set `TOPIC_PREFIX=<prefix-without-component>`
 
 ## Components
 
@@ -28,8 +31,8 @@ All components use the shared bus (Kafka or MQTT) with the security_monitor poli
 
 From repo root:
 
-1. **Vendor deps** (needed for Docker builds):  
-   `make vendor`
+1. **Vendor deps (required preflight)**:  
+   run `go mod vendor` from the repo root before Docker builds (or use `make preflight-vendor` in this system directory).
 
 2. **Prepare** (generate `.generated/docker-compose.yml` and `.env`):  
    `make prepare`  

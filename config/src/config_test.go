@@ -67,3 +67,30 @@ func TestFromEnv_ComponentTopicOverride(t *testing.T) {
 		t.Errorf("ComponentTopic: got %s", cfg.ComponentTopic)
 	}
 }
+
+func TestFromEnv_ComponentsScheme(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("TOPIC_SCHEME", "components")
+	_ = os.Setenv("SYSTEM_NAME", "deliverydron")
+	_ = os.Setenv("COMPONENT_ID", "autopilot")
+	cfg := FromEnv()
+	if cfg.TopicPrefix() != "components.deliverydron" {
+		t.Errorf("TopicPrefix: got %s", cfg.TopicPrefix())
+	}
+	if cfg.ComponentTopic != "components.deliverydron.autopilot" {
+		t.Errorf("ComponentTopic: got %s", cfg.ComponentTopic)
+	}
+}
+
+func TestFromEnv_TopicPrefixOverride(t *testing.T) {
+	os.Clearenv()
+	_ = os.Setenv("TOPIC_PREFIX", "components.deliverydron")
+	_ = os.Setenv("COMPONENT_ID", "cargo")
+	cfg := FromEnv()
+	if cfg.TopicPrefix() != "components.deliverydron" {
+		t.Errorf("TopicPrefix: got %s", cfg.TopicPrefix())
+	}
+	if cfg.ComponentTopic != "components.deliverydron.cargo" {
+		t.Errorf("ComponentTopic: got %s", cfg.ComponentTopic)
+	}
+}

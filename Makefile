@@ -1,17 +1,22 @@
-.PHONY: help prepare docker-up docker-down docker-logs unit-test build
+.PHONY: help preflight-vendor prepare docker-up docker-down docker-logs unit-test build
 
 GENERATED = .generated
 DOCKER_COMPOSE = docker compose -f $(GENERATED)/docker-compose.yml --env-file $(GENERATED)/.env
+DELIVERYDRON_ROOT ?= systems/deliverydron
 
 help:
 	@echo "make prepare     - Generate docker-compose + .env from broker and components"
+	@echo "make preflight-vendor - Verify vendor/ exists (run 'go mod vendor' from repo root if missing)"
 	@echo "make docker-up   - Start system (prepare + docker compose up)"
 	@echo "make docker-down - Stop system"
 	@echo "make docker-logs - Follow logs"
 	@echo "make unit-test   - Run Go unit tests for all components"
 
-prepare:
-	@cd ../.. && python3 scripts/prepare_system.py systems/deliverydron
+preflight-vendor:
+	@cd ../.. && test -d vendor || (echo "vendor/ not found. Run: go mod vendor (from repo root)"; exit 1)
+
+prepare: preflight-vendor
+	@cd ../.. && python3 scripts/prepare_system.py $(DELIVERYDRON_ROOT)
 
 docker-up: prepare
 	@set -a && . $(GENERATED)/.env && set +a && \
@@ -29,4 +34,4 @@ unit-test:
 	@cd ../.. && go test ./... -v -count=1
 
 build:
-	@cd ../.. && go build -o /dev/null ./systems/deliverydron/delivery_drone/cmd/delivery_drone ./systems/deliverydron/stub_component/cmd/stub_component
+	@cd ../.. && go build -o /dev/null ./$(DELIVERYDRON_ROOT)/delivery_drone/cmd/delivery_drone ./$(DELIVERYDRON_ROOT)/stub_component/cmd/stub_component

@@ -1,7 +1,8 @@
 FROM golang:1.21-alpine AS build
 WORKDIR /app
 COPY . .
-RUN go build -mod=vendor -o /mission_handler ./systems/deliverydron/mission_handler/cmd/mission_handler
+ARG DELIVERYDRON_ROOT=systems/deliverydron
+RUN go build -mod=vendor -o /mission_handler ./${DELIVERYDRON_ROOT}/mission_handler/cmd/mission_handler
 
 FROM alpine:3.19
 RUN apk --no-cache add ca-certificates && \
