@@ -13,8 +13,10 @@ type Config struct {
 	ComponentID    string // COMPONENT_ID or SYSTEM_ID
 	ComponentTopic string // COMPONENT_TOPIC or hierarchical default
 	SystemName     string // SYSTEM_NAME (default deliverydron)
-	TopicVersion   string // TOPIC_VERSION (default v1) — first segment of hierarchical topics
-	InstanceID     string // INSTANCE_ID (default Delivery001) — third segment
+	TopicScheme    string // TOPIC_SCHEME: legacy(v1.system.instance.component) | components(components.system.component)
+	TopicPrefixEnv string // TOPIC_PREFIX explicit override for full prefix without component
+	TopicVersion   string // TOPIC_VERSION (legacy only)
+	InstanceID     string // INSTANCE_ID (legacy only)
 	HealthPort     string // HEALTH_PORT for HTTP health endpoint
 
 	// Kafka
@@ -55,10 +57,17 @@ func FromEnv() *Config {
 		instanceID = "Delivery001"
 	}
 	componentTopic := strings.TrimSpace(os.Getenv("COMPONENT_TOPIC"))
+	topicScheme := strings.TrimSpace(os.Getenv("TOPIC_SCHEME"))
+	if topicScheme == "" {
+		topicScheme = "legacy"
+	}
+	topicPrefixEnv := strings.TrimSpace(os.Getenv("TOPIC_PREFIX"))
 	cfg := &Config{
 		BrokerType:     brokerType,
 		ComponentID:    componentID,
 		SystemName:     systemName,
+		TopicScheme:    topicScheme,
+		TopicPrefixEnv: topicPrefixEnv,
 		TopicVersion:   topicVersion,
 		InstanceID:     instanceID,
 		ComponentTopic: componentTopic,
@@ -119,9 +128,22 @@ func FromEnv() *Config {
 	return cfg
 }
 
-// TopicPrefix returns TOPIC_VERSION.SYSTEM_NAME.INSTANCE_ID (no trailing dot).
-// Policy placeholders ${SYSTEM_NAME} and ${TOPIC_PREFIX} expand to this string (three segments, no trailing component).
+// TopicPrefix returns the configured prefix without the component segment.
+// Priority:
+// 1) TOPIC_PREFIX env override
+// 2) TOPIC_SCHEME=components -> components.SYSTEM_NAME
+// 3) legacy -> TOPIC_VERSION.SYSTEM_NAME.INSTANCE_ID
 func (c *Config) TopicPrefix() string {
+	if p := strings.TrimSpace(c.TopicPrefixEnv); p != "" {
+		return p
+	}
+	if strings.EqualFold(strings.TrimSpace(c.TopicScheme), "components") {
+		sys := strings.TrimSpace(c.SystemName)
+		if sys == "" {
+			sys = "deliverydron"
+		}
+		return "components." + sys
+	}
 	v := strings.TrimSpace(c.TopicVersion)
 	if v == "" {
 		v = "v1"
@@ -137,8 +159,7 @@ func (c *Config) TopicPrefix() string {
 	return v + "." + sys + "." + inst
 }
 
-// BrokerTopicFor returns the full broker topic for an internal component segment, e.g.
-// "autopilot" -> "v1.deliverydron.Delivery001.autopilot".
+// BrokerTopicFor returns the full broker topic, appending component to TopicPrefix().
 func (c *Config) BrokerTopicFor(component string) string {
 	return c.TopicPrefix() + "." + strings.TrimSpace(component)
 }
