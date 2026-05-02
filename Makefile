@@ -1,4 +1,4 @@
-.PHONY: help preflight-vendor prepare docker-up docker-down docker-logs unit-test build
+.PHONY: help preflight-vendor prepare docker-up docker-down docker-logs unit-test integration-test build
 
 GENERATED = .generated
 DOCKER_COMPOSE = docker compose -f $(GENERATED)/docker-compose.yml --env-file $(GENERATED)/.env
@@ -11,6 +11,7 @@ help:
 	@echo "make docker-down - Stop system"
 	@echo "make docker-logs - Follow logs"
 	@echo "make unit-test   - Run Go unit tests for all components"
+	@echo "make integration-test - Run in-process integration tests (TestIntegration_*)"
 
 preflight-vendor:
 	@cd ../.. && test -d vendor || (echo "vendor/ not found. Run: go mod vendor (from repo root)"; exit 1)
@@ -32,6 +33,11 @@ docker-logs:
 
 unit-test:
 	@cd ../.. && go test ./... -v -count=1
+
+# Integration tests from tests/integration_*_test.go (memory bus + components; see tests/README.md).
+integration-test:
+	@test -d vendor || (echo "vendor/ not found. Run: go mod vendor (from module root)"; exit 1)
+	@go test -mod=vendor -v -count=1 ./tests -run '^TestIntegration_'
 
 build:
 	@cd ../.. && go build -o /dev/null ./$(DELIVERYDRON_ROOT)/delivery_drone/cmd/delivery_drone ./$(DELIVERYDRON_ROOT)/stub_component/cmd/stub_component
