@@ -27,6 +27,25 @@ const (
 	StateEmergencyStop = "EMERGENCY_STOP"
 )
 
+type commandTransition struct {
+	RequireMission bool
+	AllowedFrom    map[string]struct{}
+	NextState      string
+	ClearMission   bool
+	DisableKover   bool
+	ActivateKover  bool
+}
+
+var commandTransitions = map[string]commandTransition{
+	"START": {RequireMission: true, NextState: StateExecuting},
+	"PAUSE": {AllowedFrom: map[string]struct{}{StateExecuting: {}}, NextState: StatePaused},
+	"RESUME": {AllowedFrom: map[string]struct{}{StatePaused: {}}, NextState: StateExecuting},
+	"ABORT": {NextState: StateAborted, DisableKover: true},
+	"RESET": {NextState: StateIDLE, ClearMission: true, DisableKover: true},
+	"EMERGENCY_STOP": {NextState: StateEmergencyStop, DisableKover: true},
+	"KOVER": {ActivateKover: true},
+}
+
 // Autopilot runs the mission control loop and commands motors and cargo.
 type Autopilot struct {
 	*component.BaseComponent
@@ -39,6 +58,8 @@ type Autopilot struct {
 	controlIntervalSec float64
 	navPollIntervalSec float64
 	requestTimeoutSec  float64
+	proxy              *component.ProxyClient
+	audit              *component.AuditLogger
 	mu                 sync.RWMutex
 	mission            map[string]interface{}
 	state              string
@@ -96,12 +117,23 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 		controlIntervalSec: controlInterval,
 		navPollIntervalSec: navPollInterval,
 		requestTimeoutSec:  requestTimeout,
+		proxy: &component.ProxyClient{
+			Bus:                  b,
+			SenderID:             cfg.ComponentID,
+			SecurityMonitorTopic: secTopic,
+			TimeoutSec:           requestTimeout,
+		},
 		state:              StateIDLE,
 		currentStepIndex:   0,
 		lastNavState:       nil,
 		cargoState:         "CLOSED",
 		koverActive:        false,
 		lastNavPollTs:      0,
+	}
+	a.audit = &component.AuditLogger{
+		Proxy:        a.proxy,
+		JournalTopic: journalTopic,
+		Source:       "autopilot",
 	}
 	a.registerHandlers()
 	return a
@@ -123,41 +155,21 @@ func (a *Autopilot) Start(ctx context.Context) error {
 }
 
 func (a *Autopilot) controlLoop(ctx context.Context) {
-	for a.Running() {
+	component.RunControlLoop(ctx, a.Running, a.controlIntervalSec, func(ctx context.Context) {
 		a.pollNavigationIfDue(ctx)
 		a.stepControl(ctx)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Duration(a.controlIntervalSec * float64(time.Second))):
-		}
-	}
+	})
 }
 
 func (a *Autopilot) pollNavigationIfDue(ctx context.Context) {
 	now := float64(time.Now().UnixNano()) / 1e9
-	if now-a.lastNavPollTs < a.navPollIntervalSec {
+	if !component.ShouldRunInterval(now, &a.lastNavPollTs, a.navPollIntervalSec) {
 		return
 	}
-	a.lastNavPollTs = now
-	msg := map[string]interface{}{
-		"action": "proxy_request",
-		"sender": a.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": a.navigationTopic, "action": "get_state"},
-			"data":   map[string]interface{}{},
-		},
-	}
-	resp, err := a.Bus.Request(ctx, a.secMonitorTopic, msg, a.requestTimeoutSec)
+	navPl, err := a.proxy.ProxyRequest(ctx, a.navigationTopic, "get_state", map[string]interface{}{})
 	if err != nil {
 		return
 	}
-	pl, _ := resp["payload"].(map[string]interface{})
-	tr, _ := pl["target_response"].(map[string]interface{})
-	if tr == nil {
-		return
-	}
-	navPl, _ := tr["payload"].(map[string]interface{})
 	if navPl != nil {
 		a.mu.Lock()
 		a.lastNavState = navPl
@@ -217,73 +229,59 @@ func (a *Autopilot) handleCmd(_ context.Context, message map[string]interface{})
 	}
 	cmd, _ := payload["command"].(string)
 	cmd = strings.TrimSpace(strings.ToUpper(cmd))
+	transition, ok := commandTransitions[cmd]
+	if !ok {
+		return map[string]interface{}{"ok": false, "error": "unknown_command"}, nil
+	}
+
 	a.mu.Lock()
 	oldState := a.state
-	switch cmd {
-	case "START":
-		if a.mission == nil {
-			a.mu.Unlock()
-			return map[string]interface{}{"ok": false, "error": "no_mission"}, nil
-		}
-		a.state = StateExecuting
-	case "PAUSE":
-		if a.state == StateExecuting {
-			a.state = StatePaused
-		}
-	case "RESUME":
-		if a.state == StatePaused {
-			a.state = StateExecuting
-		}
-	case "ABORT":
-		a.state = StateAborted
-		a.koverActive = false
+	if transition.RequireMission && a.mission == nil {
 		a.mu.Unlock()
-		// Safe actuator sequence: stop motors, close cargo
-		if a.lastNavState != nil {
-			lat := getFloat(a.lastNavState, "lat")
-			lon := getFloat(a.lastNavState, "lon")
-			alt := getFloat(a.lastNavState, "alt_m")
-			heading := getFloat(a.lastNavState, "heading_deg")
-			a.sendMotorsTarget(context.Background(), 0, 0, 0, alt, lat, lon, heading, false)
+		return map[string]interface{}{"ok": false, "error": "no_mission"}, nil
+	}
+	if transition.AllowedFrom != nil {
+		if _, allowed := transition.AllowedFrom[a.state]; !allowed {
+			a.mu.Unlock()
+			return map[string]interface{}{"ok": true, "state": a.state}, nil
 		}
-		a.sendCargo(context.Background(), false)
-		a.logToJournal(context.Background(), "AUTOPILOT_ABORTED", map[string]interface{}{"old_state": oldState})
-		a.mu.Lock()
-	case "RESET":
+	}
+	if transition.ClearMission {
 		a.mission = nil
 		a.currentStepIndex = 0
-		a.state = StateIDLE
+	}
+	if transition.DisableKover {
 		a.koverActive = false
-	case "EMERGENCY_STOP":
-		a.state = StateEmergencyStop
-		a.koverActive = false
-		a.mu.Unlock()
-		// Safe actuator sequence: stop motors, close cargo
-		if a.lastNavState != nil {
-			lat := getFloat(a.lastNavState, "lat")
-			lon := getFloat(a.lastNavState, "lon")
-			alt := getFloat(a.lastNavState, "alt_m")
-			heading := getFloat(a.lastNavState, "heading_deg")
-			a.sendMotorsTarget(context.Background(), 0, 0, 0, alt, lat, lon, heading, false)
-		}
-		a.sendCargo(context.Background(), false)
-		a.logToJournal(context.Background(), "AUTOPILOT_EMERGENCY_STOP", map[string]interface{}{"old_state": oldState})
-		a.mu.Lock()
-	case "KOVER":
+	}
+	if transition.ActivateKover {
 		a.koverActive = true
-		a.logToJournal(context.Background(), "AUTOPILOT_KOVER_ACTIVE", map[string]interface{}{})
 		if a.state != StateExecuting && a.state != StatePaused {
 			a.state = StateExecuting
 		}
-	default:
-		a.mu.Unlock()
-		return map[string]interface{}{"ok": false, "error": "unknown_command"}, nil
 	}
+	if transition.NextState != "" {
+		a.state = transition.NextState
+	}
+	newState := a.state
+	needsSafeStop := cmd == "ABORT" || cmd == "EMERGENCY_STOP"
 	a.mu.Unlock()
-	if oldState != a.state {
-		a.logToJournal(context.Background(), "AUTOPILOT_STATE_CHANGE", map[string]interface{}{"old_state": oldState, "new_state": a.state, "command": cmd})
+
+	if cmd == "KOVER" {
+		a.logToJournal(context.Background(), "AUTOPILOT_KOVER_ACTIVE", map[string]interface{}{})
 	}
-	return map[string]interface{}{"ok": true, "state": a.state}, nil
+	if needsSafeStop {
+		a.safeActuatorStop(context.Background())
+		if cmd == "ABORT" {
+			a.logToJournal(context.Background(), "AUTOPILOT_ABORTED", map[string]interface{}{"old_state": oldState})
+		}
+		if cmd == "EMERGENCY_STOP" {
+			a.logToJournal(context.Background(), "AUTOPILOT_EMERGENCY_STOP", map[string]interface{}{"old_state": oldState})
+		}
+	}
+	if oldState != newState {
+		a.logToJournal(context.Background(), "AUTOPILOT_STATE_CHANGE", map[string]interface{}{"old_state": oldState, "new_state": newState, "command": cmd})
+	}
+	return map[string]interface{}{"ok": true, "state": newState}, nil
 }
 
 func (a *Autopilot) handleGetState(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
@@ -447,20 +445,23 @@ func computeVelocity(headingDeg, groundSpeedMps, currentAlt, targetAlt float64) 
 	return vx, vy, vz
 }
 
-func (a *Autopilot) sendMotorsTarget(ctx context.Context, vx, vy, vz, altM, lat, lon, headingDeg float64, drop bool) {
-	msg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": a.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": a.motorsTopic, "action": "SET_TARGET"},
-			"data": map[string]interface{}{
-				"vx": vx, "vy": vy, "vz": vz,
-				"alt_m": altM, "lat": lat, "lon": lon,
-				"heading_deg": headingDeg, "drop": drop,
-			},
-		},
+func (a *Autopilot) safeActuatorStop(ctx context.Context) {
+	if a.lastNavState != nil {
+		lat := getFloat(a.lastNavState, "lat")
+		lon := getFloat(a.lastNavState, "lon")
+		alt := getFloat(a.lastNavState, "alt_m")
+		heading := getFloat(a.lastNavState, "heading_deg")
+		a.sendMotorsTarget(ctx, 0, 0, 0, alt, lat, lon, heading, false)
 	}
-	if err := a.Bus.Publish(ctx, a.secMonitorTopic, msg); err != nil {
+	a.sendCargo(ctx, false)
+}
+
+func (a *Autopilot) sendMotorsTarget(ctx context.Context, vx, vy, vz, altM, lat, lon, headingDeg float64, drop bool) {
+	if err := a.proxy.ProxyPublishAsync(ctx, a.motorsTopic, "SET_TARGET", map[string]interface{}{
+		"vx": vx, "vy": vy, "vz": vz,
+		"alt_m": altM, "lat": lat, "lon": lon,
+		"heading_deg": headingDeg, "drop": drop,
+	}); err != nil {
 		log.Printf("[%s] send motors: %v", a.ComponentID, err)
 	}
 }
@@ -473,29 +474,13 @@ func (a *Autopilot) sendCargo(ctx context.Context, open bool) {
 	a.mu.Lock()
 	a.cargoState = action
 	a.mu.Unlock()
-	msg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": a.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": a.cargoTopic, "action": action},
-			"data":   map[string]interface{}{},
-		},
-	}
-	if err := a.Bus.Publish(ctx, a.secMonitorTopic, msg); err != nil {
+	if err := a.proxy.ProxyPublishAsync(ctx, a.cargoTopic, action, map[string]interface{}{}); err != nil {
 		log.Printf("[%s] send cargo: %v", a.ComponentID, err)
 	}
 }
 
 func (a *Autopilot) logToJournal(ctx context.Context, event string, details map[string]interface{}) {
-	msg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": a.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": a.journalTopic, "action": "LOG_EVENT"},
-			"data":   map[string]interface{}{"event": event, "source": "autopilot", "details": details},
-		},
-	}
-	if err := a.Bus.Publish(ctx, a.secMonitorTopic, msg); err != nil {
+	if err := a.audit.LogEvent(ctx, event, details); err != nil {
 		log.Printf("[%s] log journal: %v", a.ComponentID, err)
 	}
 }

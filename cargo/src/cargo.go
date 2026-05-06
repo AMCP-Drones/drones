@@ -25,6 +25,7 @@ type Cargo struct {
 	systemName           string
 	securityMonitorTopic string
 	journalTopic         string
+	audit               *component.AuditLogger
 	mu                   sync.RWMutex
 	state                string
 	lastChangeTs         float64
@@ -54,6 +55,16 @@ func New(cfg *config.Config, b bus.Bus) *Cargo {
 		state:                StateClosed,
 		lastChangeTs:         float64(time.Now().UnixNano()) / 1e9,
 	}
+	c.audit = &component.AuditLogger{
+		Proxy: &component.ProxyClient{
+			Bus:                  b,
+			SenderID:             cfg.ComponentID,
+			SecurityMonitorTopic: secTopic,
+			TimeoutSec:           5.0,
+		},
+		JournalTopic: journalTopic,
+		Source:       "cargo",
+	}
 	c.registerHandlers()
 	return c
 }
@@ -76,22 +87,10 @@ func (c *Cargo) setState(ctx context.Context, newState string) {
 }
 
 func (c *Cargo) logStateChange(ctx context.Context, oldState, newState string) {
-	msg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": c.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{
-				"topic":  c.journalTopic,
-				"action": "LOG_EVENT",
-			},
-			"data": map[string]interface{}{
-				"event":   "CARGO_STATE_CHANGED",
-				"source":  "cargo",
-				"details": map[string]string{"old_state": oldState, "new_state": newState},
-			},
-		},
-	}
-	if err := c.Bus.Publish(ctx, c.securityMonitorTopic, msg); err != nil {
+	if err := c.audit.LogEvent(ctx, "CARGO_STATE_CHANGED", map[string]interface{}{
+		"old_state": oldState,
+		"new_state": newState,
+	}); err != nil {
 		log.Printf("[%s] failed to log state change: %v", c.ComponentID, err)
 	}
 }

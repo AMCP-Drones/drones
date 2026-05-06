@@ -19,6 +19,8 @@ type Emergency struct {
 	journalTopic    string
 	motorsTopic     string
 	cargoTopic      string
+	proxy           *component.ProxyClient
+	audit           *component.AuditLogger
 	active          bool
 }
 
@@ -47,7 +49,18 @@ func New(cfg *config.Config, b bus.Bus) *Emergency {
 		journalTopic:    journalTopic,
 		motorsTopic:     motorsTopic,
 		cargoTopic:      cargoTopic,
+		proxy: &component.ProxyClient{
+			Bus:                  b,
+			SenderID:             cfg.ComponentID,
+			SecurityMonitorTopic: secTopic,
+			TimeoutSec:           5.0,
+		},
 		active:          false,
+	}
+	e.audit = &component.AuditLogger{
+		Proxy:        e.proxy,
+		JournalTopic: journalTopic,
+		Source:       "emergency",
 	}
 	e.registerHandlers()
 	return e
@@ -90,49 +103,22 @@ func (e *Emergency) handleLimiterEvent(ctx context.Context, message map[string]i
 	}
 
 	// 2. Cargo CLOSE via proxy_publish
-	cargoMsg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": e.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": e.cargoTopic, "action": "CLOSE"},
-			"data":   map[string]interface{}{"reason": "emergency"},
-		},
-	}
-	if err := e.Bus.Publish(ctx, e.secMonitorTopic, cargoMsg); err != nil {
+	if err := e.proxy.ProxyPublishAsync(ctx, e.cargoTopic, "CLOSE", map[string]interface{}{"reason": "emergency"}); err != nil {
 		log.Printf("[%s] cargo CLOSE: %v", e.ComponentID, err)
 		e.active = false
 		return map[string]interface{}{"ok": false, "error": "cargo_close_failed"}, nil
 	}
 
-	// 3. Motors LAND via proxy_publish
-	motorsMsg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": e.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": e.motorsTopic, "action": "LAND"},
-			"data":   map[string]interface{}{"mode": "AUTO_LAND", "reason": "emergency"},
-		},
-	}
-	if err := e.Bus.Publish(ctx, e.secMonitorTopic, motorsMsg); err != nil {
+	if err := e.proxy.ProxyPublishAsync(ctx, e.motorsTopic, "LAND", map[string]interface{}{"mode": "AUTO_LAND", "reason": "emergency"}); err != nil {
 		log.Printf("[%s] motors LAND: %v", e.ComponentID, err)
 		e.active = false
 		return map[string]interface{}{"ok": false, "error": "motors_land_failed"}, nil
 	}
 
-	// 4. Journal LOG_EVENT via proxy_publish
-	journalMsg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": e.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": e.journalTopic, "action": "LOG_EVENT"},
-			"data": map[string]interface{}{
-				"event":      "EMERGENCY_PROTOCOL_STARTED",
-				"mission_id": missionID,
-				"details":    details,
-			},
-		},
-	}
-	if err := e.Bus.Publish(ctx, e.secMonitorTopic, journalMsg); err != nil {
+	if err := e.audit.LogEvent(ctx, "EMERGENCY_PROTOCOL_STARTED", map[string]interface{}{
+		"mission_id": missionID,
+		"details":    details,
+	}); err != nil {
 		log.Printf("[%s] journal LOG_EVENT: %v", e.ComponentID, err)
 		e.active = false
 		return map[string]interface{}{"ok": false, "error": "journal_log_failed"}, nil

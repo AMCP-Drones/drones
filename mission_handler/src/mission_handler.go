@@ -23,6 +23,8 @@ type MissionHandler struct {
 	journalTopic      string
 	limiterTopic      string
 	requestTimeoutSec float64
+	proxy             *component.ProxyClient
+	audit             *component.AuditLogger
 	mu                sync.RWMutex
 	lastMission       map[string]interface{}
 	lastError         string
@@ -63,8 +65,19 @@ func New(cfg *config.Config, b bus.Bus) *MissionHandler {
 		journalTopic:      journalTopic,
 		limiterTopic:      limiterTopic,
 		requestTimeoutSec: timeout,
+		proxy: &component.ProxyClient{
+			Bus:                  b,
+			SenderID:             cfg.ComponentID,
+			SecurityMonitorTopic: secTopic,
+			TimeoutSec:           timeout,
+		},
 		lastMission:       nil,
 		lastError:         "",
+	}
+	m.audit = &component.AuditLogger{
+		Proxy:        m.proxy,
+		JournalTopic: journalTopic,
+		Source:       "mission_handler",
 	}
 	m.registerHandlers()
 	return m
@@ -110,15 +123,7 @@ func (m *MissionHandler) handleLoadMission(ctx context.Context, message map[stri
 	mid, _ := mission["mission_id"].(string)
 	m.logToJournal(ctx, "MISSION_HANDLER_MISSION_RECEIVED", map[string]interface{}{"mission_id": mid})
 
-	proxyMsg := map[string]interface{}{
-		"action": "proxy_request",
-		"sender": m.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": m.autopilotTopic, "action": "mission_load"},
-			"data":   map[string]interface{}{"mission": mission},
-		},
-	}
-	resp, err := m.Bus.Request(ctx, m.secMonitorTopic, proxyMsg, m.requestTimeoutSec)
+	resp, err := m.proxy.ProxyRequest(ctx, m.autopilotTopic, "mission_load", map[string]interface{}{"mission": mission})
 	if err != nil {
 		m.mu.Lock()
 		m.lastError = "autopilot_no_response"
@@ -126,33 +131,19 @@ func (m *MissionHandler) handleLoadMission(ctx context.Context, message map[stri
 		m.logToJournal(ctx, "MISSION_HANDLER_AUTOPILOT_ERROR", map[string]interface{}{"error": "autopilot_no_response", "mission_id": mid})
 		return map[string]interface{}{"ok": false, "error": "autopilot_no_response"}, nil
 	}
-	pl, _ := resp["payload"].(map[string]interface{})
-	tr, _ := pl["target_response"].(map[string]interface{})
-	if tr != nil {
-		trPl, _ := tr["payload"].(map[string]interface{})
-		if trPl != nil && trPl["ok"] != true {
-			errStr, _ := trPl["error"].(string)
-			if errStr == "" {
-				errStr = "autopilot_error"
-			}
-			m.mu.Lock()
-			m.lastError = errStr
-			m.mu.Unlock()
-			m.logToJournal(ctx, "MISSION_HANDLER_AUTOPILOT_ERROR", map[string]interface{}{"error": errStr, "mission_id": mid})
-			return map[string]interface{}{"ok": false, "error": errStr}, nil
+	if resp != nil && resp["ok"] != true {
+		errStr, _ := resp["error"].(string)
+		if errStr == "" {
+			errStr = "autopilot_error"
 		}
+		m.mu.Lock()
+		m.lastError = errStr
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_AUTOPILOT_ERROR", map[string]interface{}{"error": errStr, "mission_id": mid})
+		return map[string]interface{}{"ok": false, "error": errStr}, nil
 	}
 	m.logToJournal(ctx, "MISSION_HANDLER_MISSION_SENT_TO_AUTOPILOT", map[string]interface{}{"mission_id": mid})
-	// Send mission to limiter for geofence (policy allows mission_handler -> limiter mission_load)
-	limiterMsg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": m.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": m.limiterTopic, "action": "mission_load"},
-			"data":   map[string]interface{}{"mission": mission},
-		},
-	}
-	if err := m.Bus.Publish(ctx, m.secMonitorTopic, limiterMsg); err != nil {
+	if err := m.proxy.ProxyPublishAsync(ctx, m.limiterTopic, "mission_load", map[string]interface{}{"mission": mission}); err != nil {
 		log.Printf("[%s] send mission to limiter: %v", m.ComponentID, err)
 	}
 	return map[string]interface{}{"ok": true}, nil
@@ -248,19 +239,7 @@ func (m *MissionHandler) handleGetState(_ context.Context, message map[string]in
 }
 
 func (m *MissionHandler) logToJournal(ctx context.Context, event string, details map[string]interface{}) {
-	msg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": m.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": m.journalTopic, "action": "LOG_EVENT"},
-			"data": map[string]interface{}{
-				"event":   event,
-				"source":  "mission_handler",
-				"details": details,
-			},
-		},
-	}
-	if err := m.Bus.Publish(ctx, m.secMonitorTopic, msg); err != nil {
+	if err := m.audit.LogEvent(ctx, event, details); err != nil {
 		log.Printf("[%s] log to journal: %v", m.ComponentID, err)
 	}
 }
