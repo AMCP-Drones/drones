@@ -13,6 +13,7 @@ import (
 	"github.com/AMCP-Drones/drones/systems/deliverydron/bus/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/component/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/config/src"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/sdk/src"
 )
 
 // Telemetry aggregates motors and cargo state; get_state only from security_monitor.
@@ -25,6 +26,7 @@ type Telemetry struct {
 	pollIntervalSec   float64
 	requestTimeoutSec float64
 	proxy             *component.ProxyClient
+	analytics         *sdk.AnalyticsClient
 	mu                sync.RWMutex
 	lastMotors        map[string]interface{}
 	lastCargo         map[string]interface{}
@@ -80,6 +82,7 @@ func New(cfg *config.Config, b bus.Bus) *Telemetry {
 			SecurityMonitorTopic: secTopic,
 			TimeoutSec:           requestTimeout,
 		},
+		analytics: sdk.NewAnalyticsClientFromEnv(),
 		lastMotors:        nil,
 		lastCargo:         nil,
 		lastPollTs:        0,
@@ -115,6 +118,7 @@ func (t *Telemetry) pollLoop(ctx context.Context) {
 func (t *Telemetry) pollOnce(ctx context.Context) {
 	motors := t.proxyGetState(ctx, t.motorsTopic, "get_state")
 	cargo := t.proxyGetState(ctx, t.cargoTopic, "get_state")
+	nowMs := time.Now().UnixMilli()
 	t.mu.Lock()
 	if motors != nil {
 		t.lastMotors = motors
@@ -124,6 +128,7 @@ func (t *Telemetry) pollOnce(ctx context.Context) {
 	}
 	t.lastPollTs = float64(time.Now().UnixNano()) / 1e9
 	t.mu.Unlock()
+	t.postAnalyticsTelemetry(ctx, nowMs, motors, cargo)
 }
 
 func (t *Telemetry) proxyGetState(ctx context.Context, targetTopic, action string) map[string]interface{} {
@@ -158,4 +163,67 @@ func copyMap(m map[string]interface{}) map[string]interface{} {
 		c[k] = v
 	}
 	return c
+}
+
+func (t *Telemetry) postAnalyticsTelemetry(ctx context.Context, timestampMs int64, motors, cargo map[string]interface{}) {
+	if !t.analytics.Enabled() || motors == nil {
+		return
+	}
+	target, _ := motors["last_target"].(map[string]interface{})
+	if target == nil {
+		return
+	}
+	lat, okLat := asFloat(target["lat"])
+	lon, okLon := asFloat(target["lon"])
+	if !okLat || !okLon {
+		return
+	}
+	var height *float64
+	if v, ok := asFloat(target["alt_m"]); ok {
+		height = &v
+	}
+	var course *float64
+	if v, ok := asFloat(target["heading_deg"]); ok {
+		course = &v
+	}
+	var battery *int
+	if cargo != nil {
+		if v, ok := cargo["battery_pct"]; ok {
+			if f, ok := asFloat(v); ok {
+				iv := int(f)
+				battery = &iv
+			}
+		}
+	}
+	logItem := sdk.TelemetryLog{
+		APIVersion: t.analytics.APIVersion(),
+		Timestamp:  timestampMs,
+		Drone:      t.analytics.Drone(),
+		DroneID:    t.analytics.DroneID(),
+		Latitude:   lat,
+		Longitude:  lon,
+		Height:     height,
+		Course:     course,
+		Battery:    battery,
+	}
+	if err := t.analytics.PostTelemetry(ctx, []sdk.TelemetryLog{logItem}); err != nil {
+		log.Printf("[%s] analytics telemetry post: %v", t.ComponentID, err)
+	}
+}
+
+func asFloat(v interface{}) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case int32:
+		return float64(x), true
+	default:
+		return 0, false
+	}
 }

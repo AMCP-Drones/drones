@@ -52,6 +52,30 @@ Or from this directory:
 - `make docker-logs` — follow logs
 - `make unit-test` — run Go tests from repo root
 
+## Analytics Integration (DroneAnalytics)
+
+`journal` and `telemetry` can optionally export data to DroneAnalytics:
+
+- `ANALYTICS_ENABLED=true`
+- `ANALYTICS_BASE_URL=https://infopanel.csse.ru/api`
+- `ANALYTICS_API_KEY=<api-key>`
+- `ANALYTICS_TIMEOUT_S=2.0`
+- `ANALYTICS_API_VERSION=1.1.0`
+
+Telemetry payload mapping:
+
+- endpoint: `POST /log/telemetry`
+- source: `telemetry` component (`last_target` from motors state)
+- fields: `timestamp`, `drone`, `drone_id`, `latitude`, `longitude`, optional `height/course/battery`
+
+Event payload mapping:
+
+- endpoint: `POST /log/event`
+- source: `journal` component (`LOG_EVENT`)
+- fields: `timestamp`, `service`, `service_id`, `message`, optional `severity`, `event_type`
+
+By default analytics export is disabled, so existing docker/runtime behavior is unchanged.
+
 ## Broker
 
 Broker (Kafka or MQTT) is defined in repo root `docker/docker-compose.yml`. The prepare script merges it with this system's services into `.generated/`. Use `BROKER_TYPE=kafka` (default) or `mqtt` when starting.
