@@ -7,19 +7,22 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/AMCP-Drones/drones/systems/deliverydron/bus/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/component/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/config/src"
+	"github.com/AMCP-Drones/drones/systems/deliverydron/sdk/src"
 )
 
 // Journal implements append-only NDJSON event log. Accepts LOG_EVENT only from security_monitor.
 type Journal struct {
 	*component.BaseComponent
-	filePath string
-	mu       sync.Mutex
+	filePath   string
+	analytics  *sdk.AnalyticsClient
+	mu         sync.Mutex
 }
 
 // New creates a Journal. Call Start after creation.
@@ -33,7 +36,11 @@ func New(cfg *config.Config, b bus.Bus) *Journal {
 	if filePath == "" {
 		filePath = "/data/deliverydron_journal.ndjson"
 	}
-	j := &Journal{BaseComponent: base, filePath: filePath}
+	j := &Journal{
+		BaseComponent: base,
+		filePath:      filePath,
+		analytics:     sdk.NewAnalyticsClientFromEnv(),
+	}
 	j.registerHandlers()
 	return j
 }
@@ -92,5 +99,37 @@ func (j *Journal) handleLogEvent(_ context.Context, message map[string]interface
 		log.Printf("[%s] failed to write journal: %v", j.ComponentID, err)
 		return map[string]interface{}{"ok": false, "error": "write_failed"}, nil
 	}
+	j.postAnalyticsEvent(context.Background(), source, event, payload)
 	return map[string]interface{}{"ok": true}, nil
+}
+
+func (j *Journal) postAnalyticsEvent(ctx context.Context, source, event string, payload map[string]interface{}) {
+	if !j.analytics.Enabled() {
+		return
+	}
+	severity := "info"
+	if s, ok := payload["severity"].(string); ok && s != "" {
+		severity = s
+	}
+	eventType := "event"
+	upper := strings.ToUpper(event)
+	if strings.Contains(upper, "EMERGENCY") || strings.Contains(upper, "ISOLATION") || strings.Contains(upper, "LIMITER") {
+		eventType = "safety_event"
+	}
+	message := event
+	if source != "" {
+		message = message + " source=" + source
+	}
+	item := sdk.EventLog{
+		APIVersion: j.analytics.APIVersion(),
+		Timestamp:  time.Now().UnixMilli(),
+		EventType:  eventType,
+		Service:    j.analytics.Service(),
+		ServiceID:  j.analytics.ServiceID(),
+		Severity:   severity,
+		Message:    message,
+	}
+	if err := j.analytics.PostEvent(ctx, []sdk.EventLog{item}); err != nil {
+		log.Printf("[%s] analytics event post: %v", j.ComponentID, err)
+	}
 }
