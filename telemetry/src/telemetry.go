@@ -24,6 +24,7 @@ type Telemetry struct {
 	cargoTopic        string
 	pollIntervalSec   float64
 	requestTimeoutSec float64
+	proxy             *component.ProxyClient
 	mu                sync.RWMutex
 	lastMotors        map[string]interface{}
 	lastCargo         map[string]interface{}
@@ -73,6 +74,12 @@ func New(cfg *config.Config, b bus.Bus) *Telemetry {
 		cargoTopic:        cargoTopic,
 		pollIntervalSec:   pollInterval,
 		requestTimeoutSec: requestTimeout,
+		proxy: &component.ProxyClient{
+			Bus:                  b,
+			SenderID:             cfg.ComponentID,
+			SecurityMonitorTopic: secTopic,
+			TimeoutSec:           requestTimeout,
+		},
 		lastMotors:        nil,
 		lastCargo:         nil,
 		lastPollTs:        0,
@@ -120,29 +127,11 @@ func (t *Telemetry) pollOnce(ctx context.Context) {
 }
 
 func (t *Telemetry) proxyGetState(ctx context.Context, targetTopic, action string) map[string]interface{} {
-	msg := map[string]interface{}{
-		"action": "proxy_request",
-		"sender": t.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": targetTopic, "action": action},
-			"data":   map[string]interface{}{},
-		},
-	}
-	resp, err := t.Bus.Request(ctx, t.secMonitorTopic, msg, t.requestTimeoutSec)
+	pl, err := t.proxy.ProxyRequest(ctx, targetTopic, action, map[string]interface{}{})
 	if err != nil {
 		log.Printf("[%s] proxy_request %s: %v", t.ComponentID, targetTopic, err)
 		return nil
 	}
-	// Response payload is the proxy_request handler result: { target_topic, target_action, target_response }
-	payload, _ := resp["payload"].(map[string]interface{})
-	if payload == nil {
-		return nil
-	}
-	tr, _ := payload["target_response"].(map[string]interface{})
-	if tr == nil {
-		return nil
-	}
-	pl, _ := tr["payload"].(map[string]interface{})
 	return pl
 }
 

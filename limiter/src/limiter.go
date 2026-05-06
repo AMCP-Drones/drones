@@ -36,6 +36,8 @@ type Limiter struct {
 	navPollIntervalSec       float64
 	telemetryPollIntervalSec float64
 	requestTimeoutSec        float64
+	proxy                    *component.ProxyClient
+	audit                    *component.AuditLogger
 	maxDistanceFromPathM     float64
 	maxAltDeviationM         float64
 	mu                       sync.RWMutex
@@ -101,11 +103,22 @@ func New(cfg *config.Config, b bus.Bus) *Limiter {
 		navPollIntervalSec:       navPollInterval,
 		telemetryPollIntervalSec: telemetryPollInterval,
 		requestTimeoutSec:        requestTimeout,
+		proxy: &component.ProxyClient{
+			Bus:                  b,
+			SenderID:             cfg.ComponentID,
+			SecurityMonitorTopic: secTopic,
+			TimeoutSec:           requestTimeout,
+		},
 		maxDistanceFromPathM:     maxDist,
 		maxAltDeviationM:         maxAlt,
 		state:                    StateNormal,
 		lastNavPollTs:            0,
 		lastTelemetryPollTs:      0,
+	}
+	l.audit = &component.AuditLogger{
+		Proxy:        l.proxy,
+		JournalTopic: journalTopic,
+		Source:       "limiter",
 	}
 	l.registerHandlers()
 	return l
@@ -127,46 +140,26 @@ func (l *Limiter) Start(ctx context.Context) error {
 }
 
 func (l *Limiter) controlLoop(ctx context.Context) {
-	for l.Running() {
+	component.RunControlLoop(ctx, l.Running, l.controlIntervalSec, func(ctx context.Context) {
 		l.pollNavigationIfDue(ctx)
 		l.pollTelemetryIfDue(ctx)
 		l.recalculate(ctx)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Duration(l.controlIntervalSec * float64(time.Second))):
-		}
-	}
+	})
 }
 
 func (l *Limiter) proxyRequest(ctx context.Context, targetTopic, action string) map[string]interface{} {
-	msg := map[string]interface{}{
-		"action": "proxy_request",
-		"sender": l.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": targetTopic, "action": action},
-			"data":   map[string]interface{}{},
-		},
-	}
-	resp, err := l.Bus.Request(ctx, l.secMonitorTopic, msg, l.requestTimeoutSec)
+	resp, err := l.proxy.ProxyRequest(ctx, targetTopic, action, map[string]interface{}{})
 	if err != nil {
 		return nil
 	}
-	pl, _ := resp["payload"].(map[string]interface{})
-	tr, _ := pl["target_response"].(map[string]interface{})
-	if tr == nil {
-		return nil
-	}
-	payload, _ := tr["payload"].(map[string]interface{})
-	return payload
+	return resp
 }
 
 func (l *Limiter) pollNavigationIfDue(ctx context.Context) {
 	now := float64(time.Now().UnixNano()) / 1e9
-	if now-l.lastNavPollTs < l.navPollIntervalSec {
+	if !component.ShouldRunInterval(now, &l.lastNavPollTs, l.navPollIntervalSec) {
 		return
 	}
-	l.lastNavPollTs = now
 	nav := l.proxyRequest(ctx, l.navigationTopic, "get_state")
 	if nav != nil {
 		l.mu.Lock()
@@ -177,10 +170,9 @@ func (l *Limiter) pollNavigationIfDue(ctx context.Context) {
 
 func (l *Limiter) pollTelemetryIfDue(ctx context.Context) {
 	now := float64(time.Now().UnixNano()) / 1e9
-	if now-l.lastTelemetryPollTs < l.telemetryPollIntervalSec {
+	if !component.ShouldRunInterval(now, &l.lastTelemetryPollTs, l.telemetryPollIntervalSec) {
 		return
 	}
-	l.lastTelemetryPollTs = now
 	telem := l.proxyRequest(ctx, l.telemetryTopic, "get_state")
 	if telem != nil {
 		l.mu.Lock()
@@ -335,29 +327,13 @@ func (l *Limiter) publishEmergency(ctx context.Context, distanceM, altDev float6
 		"event":   "EMERGENCY_LAND_REQUIRED",
 		"details": details,
 	}
-	msg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": l.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": l.emergencyTopic, "action": "limiter_event"},
-			"data":   eventPayload,
-		},
-	}
-	if err := l.Bus.Publish(ctx, l.secMonitorTopic, msg); err != nil {
+	if err := l.proxy.ProxyPublishAsync(ctx, l.emergencyTopic, "limiter_event", eventPayload); err != nil {
 		log.Printf("[%s] publish emergency: %v", l.ComponentID, err)
 	}
 }
 
 func (l *Limiter) logToJournal(ctx context.Context, event string, details map[string]interface{}) {
-	msg := map[string]interface{}{
-		"action": "proxy_publish",
-		"sender": l.ComponentID,
-		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": l.journalTopic, "action": "LOG_EVENT"},
-			"data":   map[string]interface{}{"event": event, "source": "limiter", "details": details},
-		},
-	}
-	if err := l.Bus.Publish(ctx, l.secMonitorTopic, msg); err != nil {
+	if err := l.audit.LogEvent(ctx, event, details); err != nil {
 		log.Printf("[%s] log journal: %v", l.ComponentID, err)
 	}
 }
