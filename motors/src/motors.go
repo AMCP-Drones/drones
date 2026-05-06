@@ -3,6 +3,7 @@ package motors
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -81,7 +82,7 @@ func (m *Motors) registerHandlers() {
 	m.RegisterHandler("get_state", m.handleGetState)
 }
 
-func (m *Motors) handleSetTarget(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (m *Motors) handleSetTarget(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	if !component.IsTrustedSender(message, "security_monitor") {
 		return nil, nil
 	}
@@ -89,11 +90,9 @@ func (m *Motors) handleSetTarget(ctx context.Context, message map[string]interfa
 	if payload == nil {
 		return map[string]interface{}{"ok": false, "error": "invalid_payload"}, nil
 	}
-	target := make(map[string]interface{})
-	for _, k := range []string{"heading_deg", "ground_speed_mps", "alt_m", "vx", "vy", "vz", "lat", "lon", "drop"} {
-		if v, ok := payload[k]; ok {
-			target[k] = v
-		}
+	target, err := sanitizeTarget(payload)
+	if err != nil {
+		return map[string]interface{}{"ok": false, "error": err.Error()}, nil
 	}
 	m.mu.Lock()
 	m.lastTarget = target
@@ -101,11 +100,11 @@ func (m *Motors) handleSetTarget(ctx context.Context, message map[string]interfa
 	m.lastCmdTs = float64(time.Now().UnixNano()) / 1e9
 	mode := m.mode
 	m.mu.Unlock()
-	m.emitSITL(ctx, map[string]interface{}{"cmd": "SET_TARGET", "target": target})
+	m.emitSITL(context.Background(), map[string]interface{}{"cmd": "SET_TARGET", "target": target})
 	return map[string]interface{}{"ok": true, "mode": mode}, nil
 }
 
-func (m *Motors) handleLand(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (m *Motors) handleLand(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	if !component.IsTrustedSender(message, "security_monitor") {
 		return nil, nil
 	}
@@ -114,7 +113,7 @@ func (m *Motors) handleLand(ctx context.Context, message map[string]interface{})
 	m.lastCmdTs = float64(time.Now().UnixNano()) / 1e9
 	mode := m.mode
 	m.mu.Unlock()
-	m.emitSITL(ctx, map[string]interface{}{"cmd": "LAND"})
+	m.emitSITL(context.Background(), map[string]interface{}{"cmd": "LAND"})
 	return map[string]interface{}{"ok": true, "mode": mode}, nil
 }
 
@@ -141,5 +140,44 @@ func (m *Motors) emitSITL(ctx context.Context, command map[string]interface{}) {
 	}
 	if err := m.Bus.Publish(ctx, m.sitlTopic, msg); err != nil {
 		log.Printf("[%s] SITL publish: %v", m.ComponentID, err)
+	}
+}
+
+func sanitizeTarget(payload map[string]interface{}) (map[string]interface{}, error) {
+	target := make(map[string]interface{})
+	for _, k := range []string{"heading_deg", "ground_speed_mps", "alt_m", "vx", "vy", "vz", "lat", "lon"} {
+		if v, ok := payload[k]; ok {
+			if _, ok := toFloat(v); !ok {
+				return nil, fmt.Errorf("invalid_%s", k)
+			}
+			target[k] = v
+		}
+	}
+	if drop, ok := payload["drop"]; ok {
+		if _, ok := drop.(bool); !ok {
+			return nil, fmt.Errorf("invalid_drop")
+		}
+		target["drop"] = drop
+	}
+	if len(target) == 0 {
+		return nil, fmt.Errorf("empty_target")
+	}
+	return target, nil
+}
+
+func toFloat(v interface{}) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int32:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	default:
+		return 0, false
 	}
 }
