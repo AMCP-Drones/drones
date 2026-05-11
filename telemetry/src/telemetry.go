@@ -21,15 +21,18 @@ type Telemetry struct {
 	*component.BaseComponent
 	systemName        string
 	secMonitorTopic   string
+	navigationTopic   string
 	motorsTopic       string
 	cargoTopic        string
 	pollIntervalSec   float64
 	requestTimeoutSec float64
+	defaultBatteryPct int
 	proxy             *component.ProxyClient
 	analytics         *sdk.AnalyticsClient
 	mu                sync.RWMutex
 	lastMotors        map[string]interface{}
 	lastCargo         map[string]interface{}
+	lastNavigation    map[string]interface{}
 	lastPollTs        float64
 }
 
@@ -52,6 +55,10 @@ func New(cfg *config.Config, b bus.Bus) *Telemetry {
 	if motorsTopic == "" {
 		motorsTopic = cfg.BrokerTopicFor("motors")
 	}
+	navigationTopic := os.Getenv("NAVIGATION_TOPIC")
+	if navigationTopic == "" {
+		navigationTopic = cfg.BrokerTopicFor("navigation")
+	}
 	cargoTopic := os.Getenv("CARGO_TOPIC")
 	if cargoTopic == "" {
 		cargoTopic = cfg.BrokerTopicFor("cargo")
@@ -68,14 +75,28 @@ func New(cfg *config.Config, b bus.Bus) *Telemetry {
 			requestTimeout = v
 		}
 	}
+	defaultBattery := 100
+	if s := os.Getenv("TELEMETRY_BATTERY_PCT_DEFAULT"); s != "" {
+		if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+			if v < 0 {
+				v = 0
+			}
+			if v > 100 {
+				v = 100
+			}
+			defaultBattery = v
+		}
+	}
 	t := &Telemetry{
 		BaseComponent:     base,
 		systemName:        systemName,
 		secMonitorTopic:   secTopic,
+		navigationTopic:   navigationTopic,
 		motorsTopic:       motorsTopic,
 		cargoTopic:        cargoTopic,
 		pollIntervalSec:   pollInterval,
 		requestTimeoutSec: requestTimeout,
+		defaultBatteryPct: defaultBattery,
 		proxy: &component.ProxyClient{
 			Bus:                  b,
 			SenderID:             cfg.ComponentID,
@@ -85,6 +106,7 @@ func New(cfg *config.Config, b bus.Bus) *Telemetry {
 		analytics: sdk.NewAnalyticsClientFromEnv(),
 		lastMotors:        nil,
 		lastCargo:         nil,
+		lastNavigation:    nil,
 		lastPollTs:        0,
 	}
 	t.registerHandlers()
@@ -116,10 +138,14 @@ func (t *Telemetry) pollLoop(ctx context.Context) {
 }
 
 func (t *Telemetry) pollOnce(ctx context.Context) {
+	nav := t.proxyGetState(ctx, t.navigationTopic, "get_state")
 	motors := t.proxyGetState(ctx, t.motorsTopic, "get_state")
 	cargo := t.proxyGetState(ctx, t.cargoTopic, "get_state")
 	nowMs := time.Now().UnixMilli()
 	t.mu.Lock()
+	if nav != nil {
+		t.lastNavigation = nav
+	}
 	if motors != nil {
 		t.lastMotors = motors
 	}
@@ -128,7 +154,7 @@ func (t *Telemetry) pollOnce(ctx context.Context) {
 	}
 	t.lastPollTs = float64(time.Now().UnixNano()) / 1e9
 	t.mu.Unlock()
-	t.postAnalyticsTelemetry(ctx, nowMs, motors, cargo)
+	t.postAnalyticsTelemetry(ctx, nowMs, nav, motors, cargo)
 }
 
 func (t *Telemetry) proxyGetState(ctx context.Context, targetTopic, action string) map[string]interface{} {
@@ -147,6 +173,7 @@ func (t *Telemetry) handleGetState(_ context.Context, message map[string]interfa
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	out := map[string]interface{}{
+		"navigation":   copyMap(t.lastNavigation),
 		"motors":       copyMap(t.lastMotors),
 		"cargo":        copyMap(t.lastCargo),
 		"last_poll_ts": t.lastPollTs,
@@ -165,36 +192,98 @@ func copyMap(m map[string]interface{}) map[string]interface{} {
 	return c
 }
 
-func (t *Telemetry) postAnalyticsTelemetry(ctx context.Context, timestampMs int64, motors, cargo map[string]interface{}) {
-	if !t.analytics.Enabled() || motors == nil {
+func (t *Telemetry) postAnalyticsTelemetry(ctx context.Context, timestampMs int64, nav, motors, cargo map[string]interface{}) {
+	if !t.analytics.Enabled() {
 		return
 	}
-	target, _ := motors["last_target"].(map[string]interface{})
-	if target == nil {
-		return
+	var lat, lon float64
+	var okLat, okLon bool
+	if nav != nil {
+		lat, okLat = mapFloat(nav, "lat")
+		lon, okLon = mapFloat(nav, "lon")
 	}
-	lat, okLat := asFloat(target["lat"])
-	lon, okLon := asFloat(target["lon"])
-	if !okLat || !okLon {
-		return
-	}
-	var height *float64
-	if v, ok := asFloat(target["alt_m"]); ok {
-		height = &v
-	}
-	var course *float64
-	if v, ok := asFloat(target["heading_deg"]); ok {
-		course = &v
-	}
-	var battery *int
-	if cargo != nil {
-		if v, ok := cargo["battery_pct"]; ok {
-			if f, ok := asFloat(v); ok {
-				iv := int(f)
-				battery = &iv
+	if (!okLat || !okLon) && motors != nil {
+		target, _ := motors["last_target"].(map[string]interface{})
+		if target != nil {
+			if !okLat {
+				lat, okLat = mapFloat(target, "lat")
+			}
+			if !okLon {
+				lon, okLon = mapFloat(target, "lon")
 			}
 		}
 	}
+	if !okLat || !okLon {
+		return
+	}
+
+	var height *float64
+	if nav != nil {
+		if v, ok := mapFloat(nav, "alt_m", "height"); ok {
+			height = &v
+		}
+	}
+	if height == nil && motors != nil {
+		if target, _ := motors["last_target"].(map[string]interface{}); target != nil {
+			if v, ok := mapFloat(target, "alt_m", "height"); ok {
+				height = &v
+			}
+		}
+	}
+
+	var course *float64
+	if nav != nil {
+		if v, ok := mapFloat(nav, "heading_deg", "course"); ok {
+			course = &v
+		}
+	}
+	if course == nil && motors != nil {
+		if target, _ := motors["last_target"].(map[string]interface{}); target != nil {
+			if v, ok := mapFloat(target, "heading_deg", "course"); ok {
+				course = &v
+			}
+		}
+	}
+
+	var pitch *float64
+	if nav != nil {
+		if v, ok := mapFloat(nav, "pitch", "pitch_deg"); ok {
+			pitch = &v
+		}
+	}
+	if pitch == nil {
+		// Explicit default avoids null values in dashboards when IMU values are unavailable.
+		v := 0.0
+		pitch = &v
+	}
+
+	var roll *float64
+	if nav != nil {
+		if v, ok := mapFloat(nav, "roll", "roll_deg"); ok {
+			roll = &v
+		}
+	}
+	if roll == nil {
+		v := 0.0
+		roll = &v
+	}
+
+	batteryVal := t.defaultBatteryPct
+	if v, ok := mapFloat(cargo, "battery_pct", "battery"); ok {
+		batteryVal = int(v)
+	} else if v, ok := mapFloat(nav, "battery_pct", "battery"); ok {
+		batteryVal = int(v)
+	} else if v, ok := mapFloat(motors, "battery_pct", "battery"); ok {
+		batteryVal = int(v)
+	}
+	if batteryVal < 0 {
+		batteryVal = 0
+	}
+	if batteryVal > 100 {
+		batteryVal = 100
+	}
+	battery := batteryVal
+
 	logItem := sdk.TelemetryLog{
 		APIVersion: t.analytics.APIVersion(),
 		Timestamp:  timestampMs,
@@ -204,11 +293,27 @@ func (t *Telemetry) postAnalyticsTelemetry(ctx context.Context, timestampMs int6
 		Longitude:  lon,
 		Height:     height,
 		Course:     course,
-		Battery:    battery,
+		Pitch:      pitch,
+		Roll:       roll,
+		Battery:    &battery,
 	}
 	if err := t.analytics.PostTelemetry(ctx, []sdk.TelemetryLog{logItem}); err != nil {
 		log.Printf("[%s] analytics telemetry post: %v", t.ComponentID, err)
 	}
+}
+
+func mapFloat(m map[string]interface{}, keys ...string) (float64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	for _, k := range keys {
+		if v, ok := m[k]; ok {
+			if f, ok := asFloat(v); ok {
+				return f, true
+			}
+		}
+	}
+	return 0, false
 }
 
 func asFloat(v interface{}) (float64, bool) {
