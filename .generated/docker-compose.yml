@@ -59,8 +59,8 @@ services:
       COMPONENT_USER_A: ${COMPONENT_USER_A:-}
       COMPONENT_PASSWORD_A: ${COMPONENT_PASSWORD_A:-}
     volumes:
-    - ../../../docker/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-    - ../../../docker/mqtt/entrypoint.sh:/entrypoint.sh:ro
+    - ../docker/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    - ../docker/mqtt/entrypoint.sh:/entrypoint.sh:ro
     command:
     - /bin/sh
     - /entrypoint.sh
