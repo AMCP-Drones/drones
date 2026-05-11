@@ -21,6 +21,7 @@ type Telemetry struct {
 	*component.BaseComponent
 	systemName        string
 	secMonitorTopic   string
+	journalTopic      string
 	navigationTopic   string
 	motorsTopic       string
 	cargoTopic        string
@@ -63,6 +64,10 @@ func New(cfg *config.Config, b bus.Bus) *Telemetry {
 	if cargoTopic == "" {
 		cargoTopic = cfg.BrokerTopicFor("cargo")
 	}
+	journalTopic := os.Getenv("JOURNAL_TOPIC")
+	if journalTopic == "" {
+		journalTopic = cfg.BrokerTopicFor("journal")
+	}
 	pollInterval := 1.0
 	if s := os.Getenv("TELEMETRY_POLL_INTERVAL_S"); s != "" {
 		if v, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil && v > 0 {
@@ -91,6 +96,7 @@ func New(cfg *config.Config, b bus.Bus) *Telemetry {
 		BaseComponent:     base,
 		systemName:        systemName,
 		secMonitorTopic:   secTopic,
+		journalTopic:      journalTopic,
 		navigationTopic:   navigationTopic,
 		motorsTopic:       motorsTopic,
 		cargoTopic:        cargoTopic,
@@ -297,8 +303,10 @@ func (t *Telemetry) postAnalyticsTelemetry(ctx context.Context, timestampMs int6
 		Roll:       roll,
 		Battery:    &battery,
 	}
-	if err := t.analytics.PostTelemetry(ctx, []sdk.TelemetryLog{logItem}); err != nil {
-		log.Printf("[%s] analytics telemetry post: %v", t.ComponentID, err)
+	if err := t.proxy.ProxyPublishAsync(ctx, t.journalTopic, "POST_TELEMETRY", map[string]interface{}{
+		"telemetry_log": logItem,
+	}); err != nil {
+		log.Printf("[%s] proxy_publish telemetry %s: %v", t.ComponentID, t.journalTopic, err)
 	}
 }
 

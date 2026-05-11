@@ -79,3 +79,11 @@ By default analytics export is disabled, so existing docker/runtime behavior is 
 ## Broker
 
 Broker (Kafka or MQTT) is defined in repo root `docker/docker-compose.yml`. The prepare script merges it with this system's services into `.generated/`. Use `BROKER_TYPE=kafka` (default) or `mqtt` when starting.
+
+## Security Architecture Description
+
+System-level security description (context/architecture, ЦБПБ, policy trust model, SKIB patterns, and policy conformance checks) is maintained in [`report.md`](report.md).
+
+Security policy files used by `security_monitor`:
+- [`security_monitor/security_monitor.env`](security_monitor/security_monitor.env)
+- [`src/security_monitor/security_monitor.env`](src/security_monitor/security_monitor.env)

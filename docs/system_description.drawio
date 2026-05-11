@@ -1,0 +1,118 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.6.1 Chrome/142.0.7444.265 Electron/39.8.9 Safari/537.36" version="29.6.1">
+  <diagram id="syTL8c_7gZPs-KAXWVYo" name="Page-1">
+    <mxGraphModel dx="1042" dy="792" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" value="NUS" vertex="1">
+          <mxGeometry height="90" width="210" x="40" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" value="ORVD Security Module" vertex="1">
+          <mxGeometry height="90" width="210" x="40" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" value="DronePort" vertex="1">
+          <mxGeometry height="90" width="210" x="40" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="mission_handler C/L" vertex="1">
+          <mxGeometry height="80" width="220" x="340" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="autopilot C/L" vertex="1">
+          <mxGeometry height="80" width="220" x="340" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="limiter C/L" vertex="1">
+          <mxGeometry height="80" width="220" x="340" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="emergency M/M" vertex="1">
+          <mxGeometry height="80" width="220" x="340" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="telemetry C/L" vertex="1">
+          <mxGeometry height="80" width="220" x="340" y="550" as="geometry" />
+        </mxCell>
+        <mxCell id="5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="security_monitor [TCB, partially trusted] C/XL" vertex="1">
+          <mxGeometry height="130" width="340" x="700" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" value="navigation [TCB] S/M" vertex="1">
+          <mxGeometry height="80" width="220" x="1320" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" value="motors [TCB] M/M" vertex="1">
+          <mxGeometry height="80" width="220" x="1320" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" value="cargo [TCB] S/M" vertex="1">
+          <mxGeometry height="80" width="220" x="1320" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="14" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" value="journal [TCB] M/M" vertex="1">
+          <mxGeometry height="80" width="220" x="1320" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;dashed=1;" value="component lib [TCB] M/M" vertex="1">
+          <mxGeometry height="80" width="250" x="700" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="16" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;dashed=1;" value="config [TCB] S/M" vertex="1">
+          <mxGeometry height="80" width="250" x="700" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" value="DroneAnalytics" vertex="1">
+          <mxGeometry height="90" width="260" x="1760" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="18" edge="1" parent="1" source="2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=1;exitY=0.3;entryX=0;entryY=0.2;" target="5" value="deliverydron.mission_handler">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="19" edge="1" parent="1" source="3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="5" value="deliverydron.limiter">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="20" edge="1" parent="1" source="4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=1;exitY=0.7;entryX=0;entryY=0.8;" target="5" value="deliverydron.emergency">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="21" edge="1" parent="1" source="6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=1;exitY=0.2;entryX=0;entryY=0.1;" target="5" value="deliverydron.security_monitor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="22" edge="1" parent="1" source="7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=1;exitY=0.4;entryX=0;entryY=0.3;" target="5" value="deliverydron.security_monitor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="23" edge="1" parent="1" source="8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="5" value="deliverydron.security_monitor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="24" edge="1" parent="1" source="9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=1;exitY=0.6;entryX=0;entryY=0.7;" target="5" value="deliverydron.security_monitor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="25" edge="1" parent="1" source="10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=1;exitY=0.7;entryX=0;entryY=0.9;" target="5" value="deliverydron.security_monitor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="26" edge="1" parent="1" source="5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#82b366;endArrow=classic;exitX=1;exitY=0.2;entryX=0;entryY=0.5;" target="11" value="deliverydron.navigation">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="27" edge="1" parent="1" source="5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#82b366;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="12" value="deliverydron.motors">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="28" edge="1" parent="1" source="5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#82b366;endArrow=classic;exitX=1;exitY=0.8;entryX=0;entryY=0.5;" target="13" value="deliverydron.cargo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="29" edge="1" parent="1" source="5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#82b366;endArrow=classic;exitX=1;exitY=0.95;entryX=0;entryY=0.5;" target="14" value="deliverydron.journal">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="30" edge="1" parent="1" source="14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#82b366;endArrow=classic;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="17" value="analytics.events">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="31" edge="1" parent="1" source="14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#82b366;endArrow=classic;exitX=1;exitY=0.7;entryX=0;entryY=0.8;" target="17" value="analytics.telemetry">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="32" edge="1" parent="1" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#82b366;dashed=1;endArrow=classic;exitX=0.5;exitY=0;entryX=0.2;entryY=1;" target="5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="33" edge="1" parent="1" source="16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#82b366;dashed=1;endArrow=classic;exitX=0.5;exitY=0;entryX=0.8;entryY=1;" target="5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="34" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Green: trusted component (TCB)&lt;div&gt;Yellow: partially trusted component&lt;/div&gt;&lt;div&gt;Red: untrusted component&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Green edge: trusted/integrity data&lt;/div&gt;&lt;div&gt;Red edge: untrusted/non-integrity data&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120" width="230" x="1750" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="35" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" value="SITL" vertex="1">
+          <mxGeometry height="90" width="260" x="1760" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="36" edge="1" parent="1" source="12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#82b366;fontColor=#60B859;endArrow=classic;exitX=1;exitY=0.6;entryX=0;entryY=0.5;fillColor=#d5e8d4;" target="35" value="sitl.commands">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="37" edge="1" parent="1" source="35" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;fontColor=#b85450;endArrow=classic;exitX=0;exitY=0.4;entryX=1;entryY=0.2;" target="5" value="deliverydron.security_monitor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

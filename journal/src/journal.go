@@ -4,6 +4,7 @@ package journal
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -47,6 +48,7 @@ func New(cfg *config.Config, b bus.Bus) *Journal {
 
 func (j *Journal) registerHandlers() {
 	j.RegisterHandler("LOG_EVENT", j.handleLogEvent)
+	j.RegisterHandler("POST_TELEMETRY", j.handlePostTelemetry)
 }
 
 func (j *Journal) handleLogEvent(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
@@ -122,6 +124,36 @@ func (j *Journal) postAnalyticsEvent(ctx context.Context, source, event string, 
 	if err := j.analytics.PostEvent(ctx, []sdk.EventLog{item}); err != nil {
 		log.Printf("[%s] analytics event post: %v", j.ComponentID, err)
 	}
+}
+
+func (j *Journal) handlePostTelemetry(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !component.IsTrustedSender(message, "security_monitor") {
+		return nil, nil
+	}
+	if !j.analytics.Enabled() {
+		return map[string]interface{}{"ok": true, "forwarded": false}, nil
+	}
+	payload, _ := message["payload"].(map[string]interface{})
+	if payload == nil {
+		return map[string]interface{}{"ok": false, "error": "invalid_payload"}, nil
+	}
+	rawLog, ok := payload["telemetry_log"]
+	if !ok {
+		return map[string]interface{}{"ok": false, "error": "missing_telemetry_log"}, nil
+	}
+	var item sdk.TelemetryLog
+	b, err := json.Marshal(rawLog)
+	if err != nil {
+		return map[string]interface{}{"ok": false, "error": "invalid_telemetry_log"}, nil
+	}
+	if err := json.Unmarshal(b, &item); err != nil {
+		return map[string]interface{}{"ok": false, "error": "invalid_telemetry_log"}, nil
+	}
+	if err := j.analytics.PostTelemetry(ctx, []sdk.TelemetryLog{item}); err != nil {
+		log.Printf("[%s] analytics telemetry post: %v", j.ComponentID, err)
+		return map[string]interface{}{"ok": false, "error": fmt.Sprintf("forward_failed: %v", err)}, nil
+	}
+	return map[string]interface{}{"ok": true, "forwarded": true}, nil
 }
 
 func inferEventType(event string) string {
