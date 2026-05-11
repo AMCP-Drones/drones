@@ -107,19 +107,9 @@ func (j *Journal) postAnalyticsEvent(ctx context.Context, source, event string, 
 	if !j.analytics.Enabled() {
 		return
 	}
-	severity := "info"
-	if s, ok := payload["severity"].(string); ok && s != "" {
-		severity = s
-	}
-	eventType := "event"
-	upper := strings.ToUpper(event)
-	if strings.Contains(upper, "EMERGENCY") || strings.Contains(upper, "ISOLATION") || strings.Contains(upper, "LIMITER") {
-		eventType = "safety_event"
-	}
-	message := event
-	if source != "" {
-		message = message + " source=" + source
-	}
+	severity := inferSeverity(event, payload)
+	eventType := inferEventType(event)
+	message := buildAnalyticsMessage(source, event, payload)
 	item := sdk.EventLog{
 		APIVersion: j.analytics.APIVersion(),
 		Timestamp:  time.Now().UnixMilli(),
@@ -132,4 +122,43 @@ func (j *Journal) postAnalyticsEvent(ctx context.Context, source, event string, 
 	if err := j.analytics.PostEvent(ctx, []sdk.EventLog{item}); err != nil {
 		log.Printf("[%s] analytics event post: %v", j.ComponentID, err)
 	}
+}
+
+func inferEventType(event string) string {
+	upper := strings.ToUpper(event)
+	if strings.Contains(upper, "EMERGENCY") || strings.Contains(upper, "ISOLATION") || strings.Contains(upper, "LIMITER") {
+		return "safety_event"
+	}
+	return "event"
+}
+
+func inferSeverity(event string, payload map[string]interface{}) string {
+	if s, ok := payload["severity"].(string); ok && strings.TrimSpace(s) != "" {
+		return strings.ToLower(strings.TrimSpace(s))
+	}
+	upper := strings.ToUpper(event)
+	switch {
+	case strings.Contains(upper, "EMERGENCY") || strings.Contains(upper, "ABORT") || strings.Contains(upper, "ISOLATION"):
+		return "emergency"
+	case strings.Contains(upper, "WARNING") || strings.Contains(upper, "DEVIATION"):
+		return "warning"
+	default:
+		return "info"
+	}
+}
+
+func buildAnalyticsMessage(source, event string, payload map[string]interface{}) string {
+	msg := event
+	if source != "" {
+		msg += " source=" + source
+	}
+	if missionID, ok := payload["mission_id"].(string); ok && strings.TrimSpace(missionID) != "" {
+		msg += " mission_id=" + strings.TrimSpace(missionID)
+	}
+	if details, ok := payload["details"]; ok {
+		if b, err := json.Marshal(details); err == nil {
+			msg += " details=" + string(b)
+		}
+	}
+	return msg
 }
