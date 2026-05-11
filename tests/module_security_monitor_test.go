@@ -112,3 +112,120 @@ func TestModule_SecurityMonitor_ProxyPublishForwardsToJournal(t *testing.T) {
 		t.Fatalf("journal file: %v %q", err, string(b))
 	}
 }
+
+func TestModule_SecurityMonitor_IsolationEndRestoresPolicies(t *testing.T) {
+	ctx := context.Background()
+	mem := testutil.NewMemoryBus()
+	cfg := testutil.Config("security_monitor")
+	policies := []map[string]string{
+		{"sender": "autopilot", "topic": cfg.BrokerTopicFor("motors"), "action": "SET_TARGET"},
+	}
+	raw, _ := json.Marshal(policies)
+	t.Setenv("SECURITY_POLICIES", string(raw))
+	t.Setenv("POLICY_ADMIN_SENDER", "qa_admin")
+	sm := securitymonitor.New(cfg, mem)
+	if err := sm.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sm.Stop(ctx) }()
+
+	activateResp, err := mem.Request(ctx, cfg.BrokerTopicFor("security_monitor"), map[string]interface{}{
+		"action": "ISOLATION_START",
+		"sender": "emergency",
+		"payload": map[string]interface{}{
+			"reason": "test_activation",
+		},
+	}, 1.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activatePayload, _ := activateResp["payload"].(map[string]interface{})
+	if activatePayload["activated"] != true {
+		t.Fatalf("expected isolation activated: %#v", activatePayload)
+	}
+	firstTransitionID, _ := activatePayload["transition_id"].(string)
+
+	repeatResp, err := mem.Request(ctx, cfg.BrokerTopicFor("security_monitor"), map[string]interface{}{
+		"action": "ISOLATION_START",
+		"sender": "emergency",
+	}, 1.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeatPayload, _ := repeatResp["payload"].(map[string]interface{})
+	if repeatPayload["already_active"] != true {
+		t.Fatalf("expected idempotent isolation start: %#v", repeatPayload)
+	}
+	if repeatPayload["transition_id"] != firstTransitionID {
+		t.Fatalf("expected same transition id on idempotent activation: first=%v repeat=%v", firstTransitionID, repeatPayload["transition_id"])
+	}
+
+	recoverResp, err := mem.Request(ctx, cfg.BrokerTopicFor("security_monitor"), map[string]interface{}{
+		"action": "ISOLATION_END",
+		"sender": "qa_admin",
+		"payload": map[string]interface{}{
+			"reason": "test_recovery",
+		},
+	}, 1.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recoverPayload, _ := recoverResp["payload"].(map[string]interface{})
+	if recoverPayload["deactivated"] != true {
+		t.Fatalf("expected isolation end success: %#v", recoverPayload)
+	}
+	if recoverPayload["mode"] != "NORMAL" {
+		t.Fatalf("expected NORMAL mode after recovery: %#v", recoverPayload)
+	}
+
+	reqResp, err := mem.Request(ctx, cfg.BrokerTopicFor("security_monitor"), map[string]interface{}{
+		"action": "proxy_publish",
+		"sender": "autopilot",
+		"payload": map[string]interface{}{
+			"target": map[string]interface{}{
+				"topic":  cfg.BrokerTopicFor("motors"),
+				"action": "SET_TARGET",
+			},
+			"data": map[string]interface{}{
+				"lat": 1.0, "lon": 2.0, "alt_m": 3.0,
+			},
+		},
+	}, 1.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqPayload, _ := reqResp["payload"].(map[string]interface{})
+	if reqPayload["published"] != true {
+		t.Fatalf("restored normal policies should allow autopilot publish: %#v", reqPayload)
+	}
+}
+
+func TestModule_SecurityMonitor_WatchdogIsolatesOnMissingHeartbeat(t *testing.T) {
+	ctx := context.Background()
+	mem := testutil.NewMemoryBus()
+	cfg := testutil.Config("security_monitor")
+	t.Setenv("SECURITY_POLICIES", "")
+	t.Setenv("SECURITY_MONITOR_HEARTBEAT_TIMEOUT_S", "0.2")
+	t.Setenv("SECURITY_MONITOR_FAILSAFE_ACTION", "isolate")
+	sm := securitymonitor.New(cfg, mem)
+	if err := sm.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sm.Stop(ctx) }()
+
+	time.Sleep(1300 * time.Millisecond)
+	statusResp, err := mem.Request(ctx, cfg.BrokerTopicFor("security_monitor"), map[string]interface{}{
+		"action": "isolation_status",
+		"sender": "emergency",
+	}, 1.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusPayload, _ := statusResp["payload"].(map[string]interface{})
+	if statusPayload["mode"] != "ISOLATED" {
+		t.Fatalf("expected watchdog to isolate on missing heartbeat: %#v", statusPayload)
+	}
+	if statusPayload["reason"] == "" {
+		t.Fatalf("expected non-empty watchdog reason: %#v", statusPayload)
+	}
+}

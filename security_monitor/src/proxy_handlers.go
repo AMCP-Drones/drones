@@ -25,6 +25,7 @@ func (sm *SecurityMonitor) handleProxyRequest(ctx context.Context, message map[s
 	if sender == "" {
 		sender = "unknown"
 	}
+	sm.recordSenderSeen(sender)
 	payload, _ := message["payload"].(map[string]interface{})
 	if payload == nil {
 		return map[string]interface{}{"error": "invalid_payload"}, nil
@@ -58,6 +59,7 @@ func (sm *SecurityMonitor) handleProxyPublish(ctx context.Context, message map[s
 	if sender == "" {
 		sender = "unknown"
 	}
+	sm.recordSenderSeen(sender)
 	payload, _ := message["payload"].(map[string]interface{})
 	if payload == nil {
 		return map[string]interface{}{"published": false, "error": "invalid_payload"}, nil

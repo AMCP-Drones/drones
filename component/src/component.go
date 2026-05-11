@@ -52,14 +52,14 @@ func (c *BaseComponent) Running() bool {
 	return atomic.LoadUint32(&c.running) == 1
 }
 
-// IsTrustedSender returns true if the message sender is the security monitor (or starts with the given prefix).
-// Components that accept commands only from the security monitor should use prefix "security_monitor".
-func IsTrustedSender(message map[string]interface{}, prefix string) bool {
+// IsTrustedSender returns true only when sender exactly matches expected identity.
+// Components that accept commands only from the security monitor should use expected="security_monitor".
+func IsTrustedSender(message map[string]interface{}, expected string) bool {
 	s, _ := message["sender"].(string)
 	if s == "" {
 		return false
 	}
-	return len(prefix) <= len(s) && s[:len(prefix)] == prefix
+	return s == expected
 }
 
 func (c *BaseComponent) handlePing(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {

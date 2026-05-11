@@ -6,15 +6,14 @@ import (
 	"github.com/AMCP-Drones/drones/systems/deliverydron/component/src"
 )
 
-func TestUnit_IsTrustedSender_SecurityMonitorPrefix(t *testing.T) {
+func TestUnit_IsTrustedSender_SecurityMonitorIdentity(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		sender string
 		want   bool
 	}{
 		{"security_monitor", true},
-		{"security_monitor_extra", true},
-		// Prefix match is on the start of sender (component id), not the hierarchical topic suffix.
+		{"security_monitor_extra", false},
 		{"v1.sys.I.security_monitor", false},
 		{"other", false},
 		{"", false},
