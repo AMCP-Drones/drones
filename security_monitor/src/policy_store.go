@@ -51,6 +51,14 @@ func parsePolicies(raw string) map[PolicyKey]struct{} {
 	return out
 }
 
+func clonePolicyMap(src map[PolicyKey]struct{}) map[PolicyKey]struct{} {
+	dst := make(map[PolicyKey]struct{}, len(src))
+	for k := range src {
+		dst[k] = struct{}{}
+	}
+	return dst
+}
+
 func getStr(m map[string]interface{}, k string) string {
 	if v, ok := m[k]; ok {
 		return str(v)
@@ -93,7 +101,10 @@ func (sm *SecurityMonitor) handleSetPolicy(_ context.Context, message map[string
 	}
 	k := PolicyKey{Sender: s, Topic: t, Action: a}
 	sm.mu.Lock()
-	sm.policies[k] = struct{}{}
+	sm.normalPolicies[k] = struct{}{}
+	if sm.safetyState.Mode == ModeNormal {
+		sm.policies[k] = struct{}{}
+	}
 	sm.mu.Unlock()
 	return map[string]interface{}{"updated": true, "policy": map[string]string{"sender": s, "topic": t, "action": a}}, nil
 }
@@ -115,8 +126,11 @@ func (sm *SecurityMonitor) handleRemovePolicy(_ context.Context, message map[str
 	}
 	k := PolicyKey{Sender: s, Topic: t, Action: a}
 	sm.mu.Lock()
-	_, existed := sm.policies[k]
-	delete(sm.policies, k)
+	_, existed := sm.normalPolicies[k]
+	delete(sm.normalPolicies, k)
+	if sm.safetyState.Mode == ModeNormal {
+		delete(sm.policies, k)
+	}
 	sm.mu.Unlock()
 	return map[string]interface{}{"removed": existed, "policy": map[string]string{"sender": s, "topic": t, "action": a}}, nil
 }
@@ -127,21 +141,30 @@ func (sm *SecurityMonitor) handleClearPolicies(_ context.Context, message map[st
 		return map[string]interface{}{"cleared": false, "error": "forbidden"}, nil
 	}
 	sm.mu.Lock()
-	n := len(sm.policies)
-	sm.policies = make(map[PolicyKey]struct{})
+	n := len(sm.normalPolicies)
+	sm.normalPolicies = make(map[PolicyKey]struct{})
+	if sm.safetyState.Mode == ModeNormal {
+		sm.policies = make(map[PolicyKey]struct{})
+	}
 	sm.mu.Unlock()
 	return map[string]interface{}{"cleared": true, "removed_count": n}, nil
 }
 
 func (sm *SecurityMonitor) handleListPolicies(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
 	sm.mu.RLock()
-	list := make([]map[string]string, 0, len(sm.policies))
-	for k := range sm.policies {
+	sourcePolicies := sm.normalPolicies
+	if sm.safetyState.Mode == ModeIsolated {
+		sourcePolicies = sm.policies
+	}
+	list := make([]map[string]string, 0, len(sourcePolicies))
+	for k := range sourcePolicies {
 		list = append(list, map[string]string{"sender": k.Sender, "topic": k.Topic, "action": k.Action})
 	}
+	mode := sm.safetyState.Mode
 	sm.mu.RUnlock()
 	return map[string]interface{}{
 		"policy_admin_sender": sm.policyAdmin,
+		"mode":                mode,
 		"count":               len(list),
 		"policies":            list,
 	}, nil
