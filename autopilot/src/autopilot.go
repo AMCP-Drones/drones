@@ -20,6 +20,7 @@ import (
 const (
 	StateIDLE          = "IDLE"
 	StateMissionLoaded = "MISSION_LOADED"
+	StatePreFlight     = "PRE_FLIGHT"
 	StateExecuting     = "EXECUTING"
 	StatePaused        = "PAUSED"
 	StateCompleted     = "COMPLETED"
@@ -37,7 +38,7 @@ type commandTransition struct {
 }
 
 var commandTransitions = map[string]commandTransition{
-	"START": {RequireMission: true, NextState: StateExecuting},
+	"START": {RequireMission: true, AllowedFrom: map[string]struct{}{StateMissionLoaded: {}, StateIDLE: {}}, NextState: StatePreFlight},
 	"PAUSE": {AllowedFrom: map[string]struct{}{StateExecuting: {}}, NextState: StatePaused},
 	"RESUME": {AllowedFrom: map[string]struct{}{StatePaused: {}}, NextState: StateExecuting},
 	"ABORT": {NextState: StateAborted, DisableKover: true},
@@ -56,9 +57,11 @@ type Autopilot struct {
 	motorsTopic        string
 	cargoTopic         string
 	limiterTopic       string
-	controlIntervalSec float64
-	navPollIntervalSec float64
-	requestTimeoutSec  float64
+	controlIntervalSec    float64
+	navPollIntervalSec    float64
+	requestTimeoutSec     float64
+	preflightTimeoutSec   float64
+	preFlightStartedAt    time.Time
 	proxy              *component.ProxyClient
 	audit              *component.AuditLogger
 	mu                 sync.RWMutex
@@ -98,6 +101,7 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 	controlInterval := 0.2
 	navPollInterval := 0.1
 	requestTimeout := 5.0
+	preflightTimeout := 60.0
 	for _, pair := range []struct {
 		env string
 		v   *float64
@@ -105,6 +109,7 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 		{"AUTOPILOT_CONTROL_INTERVAL_S", &controlInterval},
 		{"AUTOPILOT_NAV_POLL_INTERVAL_S", &navPollInterval},
 		{"AUTOPILOT_REQUEST_TIMEOUT_S", &requestTimeout},
+		{"AUTOPILOT_PREFLIGHT_TIMEOUT_S", &preflightTimeout},
 	} {
 		if s := os.Getenv(pair.env); s != "" {
 			if v, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil && v > 0 {
@@ -121,9 +126,10 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 		motorsTopic:        motorsTopic,
 		cargoTopic:         cargoTopic,
 		limiterTopic:       limiterTopic,
-		controlIntervalSec: controlInterval,
-		navPollIntervalSec: navPollInterval,
-		requestTimeoutSec:  requestTimeout,
+		controlIntervalSec:  controlInterval,
+		navPollIntervalSec:  navPollInterval,
+		requestTimeoutSec:   requestTimeout,
+		preflightTimeoutSec: preflightTimeout,
 		proxy: &component.ProxyClient{
 			Bus:                  b,
 			SenderID:             cfg.ComponentID,
@@ -248,12 +254,8 @@ func (a *Autopilot) handleCmd(ctx context.Context, message map[string]interface{
 		return map[string]interface{}{"ok": false, "error": "no_mission"}, nil
 	}
 	if cmd == "START" {
-		if errKey := a.checkLimiterAuthorizationLocked(ctx); errKey != "" {
-			a.lastError = errKey
-			a.mu.Unlock()
-			return map[string]interface{}{"ok": false, "error": errKey}, nil
-		}
 		a.lastError = ""
+		a.preFlightStartedAt = time.Now()
 	}
 	if transition.AllowedFrom != nil {
 		if _, allowed := transition.AllowedFrom[a.state]; !allowed {
@@ -296,6 +298,17 @@ func (a *Autopilot) handleCmd(ctx context.Context, message map[string]interface{
 	if oldState != newState {
 		a.logToJournal(context.Background(), "AUTOPILOT_STATE_CHANGE", map[string]interface{}{"old_state": oldState, "new_state": newState, "command": cmd})
 	}
+	if cmd == "START" && newState == StatePreFlight {
+		mid := ""
+		if a.mission != nil {
+			mid, _ = a.mission["mission_id"].(string)
+		}
+		a.logToJournal(context.Background(), "AUTOPILOT_START_ACCEPTED", map[string]interface{}{"mission_id": mid, "state": newState})
+		a.stepPreFlight(ctx)
+		a.mu.Lock()
+		newState = a.state
+		a.mu.Unlock()
+	}
 	return map[string]interface{}{"ok": true, "state": newState}, nil
 }
 
@@ -320,20 +333,29 @@ func (a *Autopilot) handleGetState(_ context.Context, _ map[string]interface{}) 
 	}, nil
 }
 
-// checkLimiterAuthorizationLocked verifies limiter ORVD clearance. Caller must hold a.mu.
-func (a *Autopilot) checkLimiterAuthorizationLocked(ctx context.Context) string {
-	if a.mission == nil {
+const preflightPending = "pending"
+
+// checkLimiterAuthorization verifies limiter ORVD clearance for the loaded mission.
+// Returns "" when cleared, preflightPending while ORVD is still pending, or an error key.
+func (a *Autopilot) checkLimiterAuthorization(ctx context.Context) string {
+	a.mu.RLock()
+	mission := a.mission
+	a.mu.RUnlock()
+	if mission == nil {
 		return "no_mission"
 	}
-	mid, _ := a.mission["mission_id"].(string)
-	a.mu.Unlock()
+	mid, _ := mission["mission_id"].(string)
 	pl, err := a.proxy.ProxyRequest(ctx, a.limiterTopic, "get_state", map[string]interface{}{})
-	a.mu.Lock()
 	if err != nil {
 		return "limiter_not_cleared"
 	}
 	status, _ := pl["orvd_status"].(string)
-	if status != "AUTHORIZED" {
+	switch status {
+	case "AUTHORIZED":
+		// cleared
+	case "PENDING":
+		return preflightPending
+	default:
 		return "limiter_not_cleared"
 	}
 	orvdMid, _ := pl["orvd_mission_id"].(string)
@@ -341,6 +363,55 @@ func (a *Autopilot) checkLimiterAuthorizationLocked(ctx context.Context) string 
 		return "mission_id_mismatch"
 	}
 	return ""
+}
+
+func (a *Autopilot) stepPreFlight(ctx context.Context) {
+	a.mu.RLock()
+	state := a.state
+	started := a.preFlightStartedAt
+	timeout := a.preflightTimeoutSec
+	a.mu.RUnlock()
+	if state != StatePreFlight {
+		return
+	}
+	if timeout > 0 && !started.IsZero() && time.Since(started).Seconds() > timeout {
+		a.mu.Lock()
+		a.state = StateAborted
+		a.lastError = "preflight_timeout"
+		mid := ""
+		if a.mission != nil {
+			mid, _ = a.mission["mission_id"].(string)
+		}
+		a.mu.Unlock()
+		a.logToJournal(ctx, "AUTOPILOT_PREFLIGHT_TIMEOUT", map[string]interface{}{"mission_id": mid})
+		return
+	}
+	errKey := a.checkLimiterAuthorization(ctx)
+	if errKey == preflightPending {
+		return
+	}
+	if errKey != "" {
+		a.mu.Lock()
+		if a.state == StatePreFlight {
+			a.state = StateAborted
+			a.lastError = errKey
+		}
+		a.mu.Unlock()
+		return
+	}
+	a.mu.Lock()
+	if a.state != StatePreFlight {
+		a.mu.Unlock()
+		return
+	}
+	a.state = StateExecuting
+	a.lastError = ""
+	mid := ""
+	if a.mission != nil {
+		mid, _ = a.mission["mission_id"].(string)
+	}
+	a.mu.Unlock()
+	a.logToJournal(ctx, "AUTOPILOT_PREFLIGHT_PASSED", map[string]interface{}{"mission_id": mid})
 }
 
 func (a *Autopilot) stepControl(ctx context.Context) {
@@ -351,6 +422,10 @@ func (a *Autopilot) stepControl(ctx context.Context) {
 	stepIndex := a.currentStepIndex
 	kover := a.koverActive
 	a.mu.RUnlock()
+	if state == StatePreFlight {
+		a.stepPreFlight(ctx)
+		return
+	}
 	if nav == nil {
 		return
 	}

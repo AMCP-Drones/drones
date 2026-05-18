@@ -247,24 +247,48 @@ func (l *Limiter) handleMissionLoad(ctx context.Context, message map[string]inte
 	}, nil
 }
 
-func (l *Limiter) handleUpdateConfig(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
-	if !component.IsTrustedSender(message, "security_monitor") {
+func isLimiterConfigSender(message map[string]interface{}) bool {
+	return component.IsTrustedSender(message, "security_monitor") ||
+		component.IsTrustedSender(message, "orvd")
+}
+
+func applyConfigPayload(l *Limiter, payload map[string]interface{}) {
+	if v, ok := payload["max_distance_from_path_m"].(float64); ok && v > 0 {
+		l.maxDistanceFromPathM = v
+	}
+	if v, ok := payload["max_alt_deviation_m"].(float64); ok && v > 0 {
+		l.maxAltDeviationM = v
+	}
+	if constraints, ok := payload["constraints"].(map[string]interface{}); ok {
+		if v, ok := constraints["max_distance_from_path_m"].(float64); ok && v > 0 {
+			l.maxDistanceFromPathM = v
+		}
+		if v, ok := constraints["max_alt_deviation_m"].(float64); ok && v > 0 {
+			l.maxAltDeviationM = v
+		}
+	}
+}
+
+func (l *Limiter) handleUpdateConfig(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !isLimiterConfigSender(message) {
 		return nil, nil
 	}
 	payload, _ := message["payload"].(map[string]interface{})
 	if payload == nil {
 		return map[string]interface{}{"ok": false, "error": "invalid_payload"}, nil
 	}
+	fromORVD := component.IsTrustedSender(message, "orvd")
 	l.mu.Lock()
-	if v, ok := payload["max_distance_from_path_m"].(float64); ok {
-		l.maxDistanceFromPathM = v
-	}
-	if v, ok := payload["max_alt_deviation_m"].(float64); ok {
-		l.maxAltDeviationM = v
-	}
+	applyConfigPayload(l, payload)
 	localMaxDistanceFromPathM := l.maxDistanceFromPathM
 	localMaxAltDeviationM := l.maxAltDeviationM
 	l.mu.Unlock()
+	if fromORVD {
+		l.logToJournal(ctx, "ORVD_PUSH_UPDATE_CONFIG", map[string]interface{}{
+			"max_distance_from_path_m": localMaxDistanceFromPathM,
+			"max_alt_deviation_m":      localMaxAltDeviationM,
+		})
+	}
 	return map[string]interface{}{
 		"ok":                       true,
 		"max_distance_from_path_m": localMaxDistanceFromPathM,

@@ -23,6 +23,7 @@ func orvdPolicies(prefix, orvdTopic string) string {
 		{"sender": "limiter", "topic": prefix + ".journal", "action": "LOG_EVENT"},
 		{"sender": "limiter", "topic": prefix + ".emergency", "action": "limiter_event"},
 		{"sender": "autopilot", "topic": prefix + ".limiter", "action": "get_state"},
+		{"sender": "orvd", "topic": prefix + ".limiter", "action": "update_config"},
 		{"sender": "autopilot", "topic": prefix + ".navigation", "action": "get_state"},
 		{"sender": "autopilot", "topic": prefix + ".motors", "action": "SET_TARGET"},
 		{"sender": "autopilot", "topic": prefix + ".cargo", "action": "CLOSE"},
@@ -364,8 +365,11 @@ func TestModule_ORVD_AutopilotStartBlockedWithoutLimiterAuth(t *testing.T) {
 		t.Fatal(err)
 	}
 	pl, _ := resp["payload"].(map[string]interface{})
-	if pl["ok"] == true {
-		t.Fatalf("START should fail without limiter auth: %#v", pl)
+	if pl["ok"] != true {
+		t.Fatalf("START failed: %#v", pl)
+	}
+	if pl["state"] != autopilot.StateAborted {
+		t.Fatalf("expected ABORTED without limiter auth, got state=%#v", pl["state"])
 	}
 }
 
@@ -403,7 +407,42 @@ func TestModule_ORVD_AutopilotStartAfterLimiterAuth(t *testing.T) {
 		t.Fatalf("START failed: %#v", pl)
 	}
 	if pl["state"] != autopilot.StateExecuting {
-		t.Fatalf("state=%#v", pl["state"])
+		t.Fatalf("expected EXECUTING after preflight, got state=%#v", pl["state"])
+	}
+}
+
+func TestModule_ORVD_LimiterUpdateConfigFromORVD(t *testing.T) {
+	ctx := context.Background()
+	mem := testutil.NewMemoryBus()
+	cfg := testutil.Config("limiter")
+	t.Setenv("JOURNAL_FILE_PATH", t.TempDir()+"/orvd_push.ndjson")
+
+	lim := limiter.New(cfg, mem)
+	if err := lim.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lim.Stop(ctx) })
+
+	_ = mem.Publish(ctx, cfg.BrokerTopicFor("limiter"), map[string]interface{}{
+		"action": "update_config",
+		"sender": "orvd",
+		"payload": map[string]interface{}{
+			"constraints": map[string]interface{}{
+				"max_distance_from_path_m": 25.0,
+				"max_alt_deviation_m":      12.0,
+			},
+		},
+	})
+
+	st, err := mem.Request(ctx, cfg.BrokerTopicFor("limiter"), map[string]interface{}{
+		"action": "get_state", "sender": "security_monitor", "payload": map[string]interface{}{},
+	}, 2.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pl, _ := st["payload"].(map[string]interface{})
+	if pl["max_distance_from_path_m"] != 25.0 || pl["max_alt_deviation_m"] != 12.0 {
+		t.Fatalf("constraints not applied: %#v", pl)
 	}
 }
 
