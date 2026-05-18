@@ -59,6 +59,10 @@ flowchart TD
   journal -->|"analytics.events"| analytics
 ```
 
+### 0.3 Диаграмма архитектуры политики
+
+![](system_description.drawio.png)
+
 ---
 
 ## 1) ЦБПБ
