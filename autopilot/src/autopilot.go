@@ -417,16 +417,43 @@ func (a *Autopilot) requestDroneportTakeoff(ctx context.Context) string {
 		return "no_mission"
 	}
 	mid, _ := mission["mission_id"].(string)
+	st, err := a.proxy.ProxyRequest(ctx, a.emergencyTopic, "get_state", map[string]interface{}{})
+	if err == nil && st != nil {
+		if phase, _ := st["droneport_phase"].(string); phase == "DEPARTED" {
+			return ""
+		}
+	}
 	pl, err := a.proxy.ProxyRequest(ctx, a.emergencyTopic, "droneport_takeoff", map[string]interface{}{
 		"mission_id": mid,
 	})
 	if err != nil {
 		return "droneport_denied"
 	}
+	if pl != nil && pl["pending"] == true {
+		return preflightPending
+	}
 	if pl == nil || pl["ok"] != true {
 		return "droneport_denied"
 	}
 	return ""
+}
+
+func (a *Autopilot) notifyDroneportLand(ctx context.Context, missionID string) {
+	if missionID == "" {
+		return
+	}
+	payload := map[string]interface{}{"mission_id": missionID}
+	a.mu.RLock()
+	nav := a.lastNavState
+	a.mu.RUnlock()
+	if nav != nil {
+		if v, ok := nav["battery_pct"]; ok {
+			payload["battery_pct"] = v
+		} else if v, ok := nav["battery"]; ok {
+			payload["battery"] = v
+		}
+	}
+	_, _ = a.proxy.ProxyRequest(ctx, a.emergencyTopic, "droneport_land", payload)
 }
 
 func (a *Autopilot) stepPreFlight(ctx context.Context) {
@@ -476,7 +503,11 @@ func (a *Autopilot) stepPreFlight(ctx context.Context) {
 		a.mu.Unlock()
 		return
 	}
-	if dpErr := a.requestDroneportTakeoff(ctx); dpErr != "" {
+	dpErr := a.requestDroneportTakeoff(ctx)
+	if dpErr == preflightPending {
+		return
+	}
+	if dpErr != "" {
 		a.mu.Lock()
 		if a.state == StatePreFlight {
 			a.state = StateAborted
@@ -536,6 +567,7 @@ func (a *Autopilot) stepControl(ctx context.Context) {
 			mid, _ := a.mission["mission_id"].(string)
 			a.mu.Unlock()
 			a.logToJournal(ctx, "AUTOPILOT_MISSION_COMPLETED", map[string]interface{}{"mission_id": mid})
+			a.notifyDroneportLand(ctx, mid)
 			a.notifyORVDComplete(ctx, mid)
 			return
 		}
@@ -569,6 +601,7 @@ func (a *Autopilot) stepControl(ctx context.Context) {
 			mid, _ := a.mission["mission_id"].(string)
 			a.mu.Unlock()
 			a.logToJournal(ctx, "AUTOPILOT_MISSION_COMPLETED", map[string]interface{}{"mission_id": mid})
+			a.notifyDroneportLand(ctx, mid)
 			a.notifyORVDComplete(ctx, mid)
 			a.sendMotorsTarget(ctx, 0, 0, 0, alt, lat, lon, getFloat(nav, "heading_deg"), false)
 			a.sendCargo(ctx, false)

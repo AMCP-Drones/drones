@@ -5,6 +5,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/AMCP-Drones/drones/systems/deliverydron/bus/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/component/src"
@@ -21,8 +23,14 @@ type Emergency struct {
 	cargoTopic      string
 	proxy           *component.ProxyClient
 	audit           *component.AuditLogger
-	droneport       droneportConfig
-	active          bool
+	droneport              droneportConfig
+	dpMu                   sync.Mutex
+	droneportPhase         string
+	droneportPortID        string
+	droneportLastError     string
+	droneportLastMissionID string
+	droneportChargeWaitAt  time.Time
+	active                 bool
 }
 
 // New creates an Emergency component. Call Start after creation.
@@ -64,6 +72,11 @@ func New(cfg *config.Config, b bus.Bus) *Emergency {
 		Source:       "emergency",
 	}
 	e.droneport = loadDroneportConfig(cfg.InstanceID, e.proxy)
+	if e.droneport.topic != "" || e.droneport.orchestratorTopic != "" {
+		e.droneportPhase = DroneportPhaseNotRegistered
+	} else {
+		e.droneportPhase = DroneportPhaseDisabled
+	}
 	e.registerHandlers()
 	return e
 }
@@ -71,6 +84,7 @@ func New(cfg *config.Config, b bus.Bus) *Emergency {
 func (e *Emergency) registerHandlers() {
 	e.RegisterHandler("limiter_event", e.handleLimiterEvent)
 	e.RegisterHandler("droneport_takeoff", e.handleDroneportTakeoff)
+	e.RegisterHandler("droneport_land", e.handleDroneportLand)
 	e.RegisterHandler("droneport_event", e.handleDroneportEvent)
 	e.RegisterHandler("get_state", e.handleGetState)
 }
@@ -84,9 +98,43 @@ func (e *Emergency) handleDroneportTakeoff(ctx context.Context, message map[stri
 		return map[string]interface{}{"ok": false, "error": "invalid_payload"}, nil
 	}
 	mid, _ := payload["mission_id"].(string)
-	ok, _ := e.requestDroneportTakeoff(ctx, mid)
+	lb := optionalLandingBattery(payload, e.droneport.landingBattery)
+	result, extra := e.runPreflight(ctx, mid, lb)
+	switch result {
+	case preflightOK:
+		return map[string]interface{}{"ok": true, "extra": extra}, nil
+	case preflightPending:
+		return map[string]interface{}{"ok": false, "pending": true}, nil
+	default:
+		errKey := "droneport_denied"
+		if extra != nil {
+			if em, ok := extra["error"].(string); ok && em != "" {
+				errKey = em
+			}
+		}
+		return map[string]interface{}{"ok": false, "error": errKey, "extra": extra}, nil
+	}
+}
+
+func (e *Emergency) handleDroneportLand(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !component.IsTrustedSender(message, "security_monitor") && !component.IsTrustedSender(message, "autopilot") {
+		return nil, nil
+	}
+	payload, _ := message["payload"].(map[string]interface{})
+	if payload == nil {
+		return map[string]interface{}{"ok": false, "error": "invalid_payload"}, nil
+	}
+	mid, _ := payload["mission_id"].(string)
+	lb := optionalLandingBattery(payload, e.droneport.landingBattery)
+	ok, extra := e.runPostMissionLand(ctx, mid, lb)
 	if !ok {
-		return map[string]interface{}{"ok": false, "error": "droneport_denied"}, nil
+		errKey := "droneport_land_denied"
+		if extra != nil {
+			if em, ok := extra["error"].(string); ok && em != "" {
+				errKey = em
+			}
+		}
+		return map[string]interface{}{"ok": false, "error": errKey}, nil
 	}
 	return map[string]interface{}{"ok": true}, nil
 }
@@ -160,5 +208,9 @@ func (e *Emergency) handleLimiterEvent(ctx context.Context, message map[string]i
 }
 
 func (e *Emergency) handleGetState(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
-	return map[string]interface{}{"active": e.active}, nil
+	st := map[string]interface{}{"active": e.active}
+	for k, v := range e.droneportStateSnapshot() {
+		st[k] = v
+	}
+	return st, nil
 }
