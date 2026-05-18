@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/AMCP-Drones/drones/systems/deliverydron/autopilot/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/limiter/src"
@@ -24,19 +25,27 @@ func orvdPolicies(prefix, orvdTopic string) string {
 		{"sender": "limiter", "topic": prefix + ".journal", "action": "LOG_EVENT"},
 		{"sender": "limiter", "topic": prefix + ".emergency", "action": "limiter_event"},
 		{"sender": "autopilot", "topic": prefix + ".limiter", "action": "get_state"},
+		{"sender": "autopilot", "topic": prefix + ".limiter", "action": "orvd_takeoff"},
+		{"sender": "autopilot", "topic": prefix + ".limiter", "action": "orvd_complete"},
 		{"sender": "autopilot", "topic": prefix + ".emergency", "action": "droneport_takeoff"},
 		{"sender": "emergency", "topic": prefix + ".journal", "action": "LOG_EVENT"},
 		{"sender": "orvd", "topic": prefix + ".limiter", "action": "update_config"},
+		{"sender": "orvd", "topic": prefix + ".limiter", "action": "revoke_takeoff"},
+		{"sender": "orvd", "topic": prefix + ".navigation", "action": "get_state"},
 		{"sender": "autopilot", "topic": prefix + ".navigation", "action": "get_state"},
 		{"sender": "autopilot", "topic": prefix + ".motors", "action": "SET_TARGET"},
 		{"sender": "autopilot", "topic": prefix + ".cargo", "action": "CLOSE"},
 		{"sender": "autopilot", "topic": prefix + ".journal", "action": "LOG_EVENT"},
 	}
 	if orvdTopic != "" {
-		policies = append(policies,
-			map[string]string{"sender": "limiter", "topic": orvdTopic, "action": "validate_mission"},
-			map[string]string{"sender": "limiter", "topic": orvdTopic, "action": "request_takeoff"},
-		)
+		for _, action := range []string{
+			"register_drone", "register_mission", "authorize_mission", "request_takeoff",
+			"send_telemetry", "complete_mission", "report_incident", "get_mission_status",
+		} {
+			policies = append(policies, map[string]string{
+				"sender": "limiter", "topic": orvdTopic, "action": action,
+			})
+		}
 	}
 	raw, _ := json.Marshal(policies)
 	return string(raw)
@@ -52,6 +61,10 @@ func sampleMission(id string) map[string]interface{} {
 }
 
 func startORVDStack(t *testing.T, orvdTopic string, stubAutopilot bool, orvdHandler func(map[string]interface{}) map[string]interface{}) (*testutil.MemoryBus, *securitymonitor.SecurityMonitor, *limiter.Limiter, *missionhandler.MissionHandler, *autopilot.Autopilot) {
+	return startORVDStackWithNav(t, orvdTopic, stubAutopilot, orvdHandler, nil)
+}
+
+func startORVDStackWithNav(t *testing.T, orvdTopic string, stubAutopilot bool, orvdHandler func(map[string]interface{}) map[string]interface{}, navState map[string]interface{}) (*testutil.MemoryBus, *securitymonitor.SecurityMonitor, *limiter.Limiter, *missionhandler.MissionHandler, *autopilot.Autopilot) {
 	t.Helper()
 	ctx := context.Background()
 	mem := testutil.NewMemoryBus()
@@ -118,6 +131,23 @@ func startORVDStack(t *testing.T, orvdTopic string, stubAutopilot bool, orvdHand
 		})
 	}
 	_ = mem.Subscribe(ctx, prefix+".journal", func(map[string]interface{}) {})
+
+	if navState != nil {
+		_ = mem.Subscribe(ctx, prefix+".navigation", func(msg map[string]interface{}) {
+			if msg["action"] != "get_state" {
+				return
+			}
+			replyTo, _ := msg["reply_to"].(string)
+			if replyTo == "" {
+				return
+			}
+			cid, _ := msg["correlation_id"].(string)
+			_ = mem.Publish(ctx, replyTo, map[string]interface{}{
+				"action": "response", "sender": "navigation", "success": true,
+				"correlation_id": cid, "payload": navState,
+			})
+		})
+	}
 
 	sm := securitymonitor.New(testutil.Config("security_monitor"), mem)
 	if err := sm.Start(ctx); err != nil {
@@ -191,14 +221,9 @@ func TestModule_ORVD_LimiterBoundsFail(t *testing.T) {
 
 func TestModule_ORVD_LimiterApproveAndDeny(t *testing.T) {
 	orvdTopic := "test.orvd.approve"
-	mem, _, _, _, _ := startORVDStack(t, orvdTopic, true, func(msg map[string]interface{}) map[string]interface{} {
-		pl, _ := msg["payload"].(map[string]interface{})
-		mid, _ := pl["mission_id"].(string)
-		if mid == "m-deny" {
-			return map[string]interface{}{"status": "denied", "reason": "restricted"}
-		}
-		return map[string]interface{}{"status": "mission_authorized"}
-	})
+	mock := newOpbdMock()
+	mock.rejectMission("m-deny")
+	mem, _, _, _, _ := startORVDStack(t, orvdTopic, true, mock.handle)
 
 	ctx := context.Background()
 	prefix := testutil.TopicPrefix()
@@ -286,12 +311,14 @@ func TestModule_ORVD_MissionHandlerSkipsAutopilotOnLimiterDeny(t *testing.T) {
 	t.Setenv("JOURNAL_FILE_PATH", t.TempDir()+"/j.ndjson")
 	t.Setenv("LIMITER_ORVD_MOCK_SUCCESS", "0")
 
+	mock := newOpbdMock()
+	mock.rejectMission("m-skip")
 	_ = mem.Subscribe(ctx, orvdTopic, func(msg map[string]interface{}) {
 		replyTo, _ := msg["reply_to"].(string)
 		cid, _ := msg["correlation_id"].(string)
 		_ = mem.Publish(ctx, replyTo, map[string]interface{}{
 			"action": "response", "sender": "orvd", "success": true, "correlation_id": cid,
-			"payload": map[string]interface{}{"status": "denied"},
+			"payload": mock.handle(msg),
 		})
 	})
 	_ = mem.Subscribe(ctx, prefix+".journal", func(map[string]interface{}) {})
@@ -387,9 +414,9 @@ func TestModule_ORVD_AutopilotStartAfterLimiterAuth(t *testing.T) {
 	orvdTopic := "test.orvd.start"
 	prefix := testutil.TopicPrefix()
 	ctx := context.Background()
-	mem, _, _, _, _ := startORVDStack(t, orvdTopic, false, func(map[string]interface{}) map[string]interface{} {
-		return map[string]interface{}{"status": "mission_authorized"}
-	})
+	mock := newOpbdMock()
+	nav := map[string]interface{}{"lat": 55.75, "lon": 37.61, "alt_m": 100.0, "heading_deg": 0.0}
+	mem, _, _, _, _ := startORVDStackWithNav(t, orvdTopic, false, mock.handle, nav)
 
 	_, err := mem.Request(ctx, prefix+".mission_handler", map[string]interface{}{
 		"action": "LOAD_MISSION",
@@ -488,7 +515,7 @@ func TestModule_ORVD_PolicyBlocksLimiterWithoutORVDRule(t *testing.T) {
 		"action": "proxy_request",
 		"sender": "limiter",
 		"payload": map[string]interface{}{
-			"target": map[string]interface{}{"topic": orvdTopic, "action": "validate_mission"},
+			"target": map[string]interface{}{"topic": orvdTopic, "action": "register_drone"},
 			"data":   map[string]interface{}{"drone_id": "drone_001"},
 		},
 	}, 2.0)
@@ -498,5 +525,176 @@ func TestModule_ORVD_PolicyBlocksLimiterWithoutORVDRule(t *testing.T) {
 	pl, _ := resp["payload"].(map[string]interface{})
 	if pl["error"] != "forbidden" {
 		t.Fatalf("expected forbidden, got %#v", pl)
+	}
+}
+
+func TestModule_ORVD_RevokeTakeoffTriggersEmergency(t *testing.T) {
+	ctx := context.Background()
+	mem := testutil.NewMemoryBus()
+	prefix := testutil.TopicPrefix()
+	cfg := testutil.Config("limiter")
+
+	policies := []map[string]string{
+		{"sender": "limiter", "topic": prefix + ".emergency", "action": "limiter_event"},
+		{"sender": "limiter", "topic": prefix + ".journal", "action": "LOG_EVENT"},
+	}
+	raw, _ := json.Marshal(policies)
+	t.Setenv("SECURITY_POLICIES", string(raw))
+	t.Setenv("JOURNAL_FILE_PATH", t.TempDir()+"/revoke.ndjson")
+	t.Setenv("LIMITER_ORVD_MOCK_SUCCESS", "1")
+
+	emergencyEvents := 0
+	_ = mem.Subscribe(ctx, prefix+".emergency", func(msg map[string]interface{}) {
+		if msg["action"] == "limiter_event" {
+			emergencyEvents++
+		}
+	})
+
+	sm := securitymonitor.New(testutil.Config("security_monitor"), mem)
+	if err := sm.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sm.Stop(ctx) })
+
+	lim := limiter.New(cfg, mem)
+	if err := lim.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lim.Stop(ctx) })
+
+	_ = mem.Publish(ctx, cfg.BrokerTopicFor("limiter"), map[string]interface{}{
+		"action": "revoke_takeoff",
+		"sender": "orvd",
+		"payload": map[string]interface{}{
+			"drone_id": "drone_001",
+		},
+	})
+
+	time.Sleep(50 * time.Millisecond)
+	if emergencyEvents < 1 {
+		t.Fatalf("expected limiter_event on revoke, got %d", emergencyEvents)
+	}
+}
+
+func TestModule_ORVD_SendTelemetryEmergency(t *testing.T) {
+	orvdTopic := "test.orvd.telemetry"
+	mock := newOpbdMock()
+	mock.setEmergencyCoords(55.75, 37.61)
+	nav := map[string]interface{}{"lat": 55.75, "lon": 37.61, "alt_m": 100.0}
+
+	ctx := context.Background()
+	mem := testutil.NewMemoryBus()
+	prefix := testutil.TopicPrefix()
+
+	t.Setenv("SECURITY_POLICIES", orvdPolicies(prefix, orvdTopic))
+	t.Setenv("ORVD_TOPIC", orvdTopic)
+	t.Setenv("JOURNAL_FILE_PATH", t.TempDir()+"/tel.ndjson")
+	t.Setenv("LIMITER_ORVD_MOCK_SUCCESS", "0")
+	t.Setenv("LIMITER_ORVD_TELEMETRY_INTERVAL_S", "0.05")
+	t.Setenv("LIMITER_NAV_POLL_INTERVAL_S", "0.05")
+	t.Setenv("LIMITER_CONTROL_INTERVAL_S", "0.05")
+
+	_ = mem.Subscribe(ctx, orvdTopic, func(msg map[string]interface{}) {
+		replyTo, _ := msg["reply_to"].(string)
+		cid, _ := msg["correlation_id"].(string)
+		_ = mem.Publish(ctx, replyTo, map[string]interface{}{
+			"action": "response", "sender": "orvd", "success": true,
+			"correlation_id": cid, "payload": mock.handle(msg),
+		})
+	})
+	_ = mem.Subscribe(ctx, prefix+".journal", func(map[string]interface{}) {})
+	navPolls := 0
+	_ = mem.Subscribe(ctx, prefix+".navigation", func(msg map[string]interface{}) {
+		if msg["action"] != "get_state" {
+			return
+		}
+		navPolls++
+		replyTo, _ := msg["reply_to"].(string)
+		cid, _ := msg["correlation_id"].(string)
+		_ = mem.Publish(ctx, replyTo, map[string]interface{}{
+			"action": "response", "sender": "navigation", "success": true,
+			"correlation_id": cid, "payload": nav,
+		})
+	})
+
+	emergencyEvents := 0
+	_ = mem.Subscribe(ctx, prefix+".emergency", func(msg map[string]interface{}) {
+		if msg["action"] == "limiter_event" {
+			emergencyEvents++
+		}
+	})
+
+	sm := securitymonitor.New(testutil.Config("security_monitor"), mem)
+	if err := sm.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sm.Stop(ctx) })
+
+	lim := limiter.New(testutil.Config("limiter"), mem)
+	if err := lim.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lim.Stop(ctx) })
+
+	loadResp, err := mem.Request(ctx, prefix+".limiter", map[string]interface{}{
+		"action": "mission_load",
+		"sender": "security_monitor",
+		"payload": map[string]interface{}{
+			"mission": sampleMission("m-tel"),
+		},
+	}, 5.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pl, _ := loadResp["payload"].(map[string]interface{})
+	if pl["ok"] != true {
+		t.Fatalf("mission_load failed: %#v", pl)
+	}
+
+	for i := 0; i < 40 && navPolls < 1; i++ {
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	takeoffResp, err := mem.Request(ctx, prefix+".limiter", map[string]interface{}{
+		"action": "orvd_takeoff",
+		"sender": "security_monitor",
+		"payload": map[string]interface{}{
+			"mission_id": "m-tel",
+		},
+	}, 5.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tPl, _ := takeoffResp["payload"].(map[string]interface{})
+	if tPl["ok"] != true {
+		t.Fatalf("orvd_takeoff failed: %#v", tPl)
+	}
+
+	stResp, err := mem.Request(ctx, prefix+".limiter", map[string]interface{}{
+		"action": "get_state", "sender": "security_monitor", "payload": map[string]interface{}{},
+	}, 2.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stPl, _ := stResp["payload"].(map[string]interface{})
+	if stPl["orvd_takeoff_authorized"] != true {
+		t.Fatalf("takeoff not authorized in limiter state: %#v", stPl)
+	}
+	if stPl["mission_loaded"] != true {
+		t.Fatalf("mission not loaded in limiter state: %#v", stPl)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && emergencyEvents < 1 {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if navPolls < 1 {
+		t.Fatalf("expected navigation polls, got %d", navPolls)
+	}
+	if mock.telemetryCalls < 1 {
+		t.Fatalf("expected send_telemetry calls, got %d (nav_polls=%d)", mock.telemetryCalls, navPolls)
+	}
+	if emergencyEvents < 1 {
+		t.Fatalf("expected emergency from ORVD telemetry, got %d events (telemetry_calls=%d)", emergencyEvents, mock.telemetryCalls)
 	}
 }

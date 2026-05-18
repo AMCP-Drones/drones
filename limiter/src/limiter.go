@@ -50,6 +50,10 @@ type Limiter struct {
 	orvd                     orvdConfig
 	orvdStatus               string
 	orvdMissionID            string
+	orvdPhase                string
+	orvdDroneRegistered      bool
+	orvdTakeoffAuthorized    bool
+	lastORVDTelemetryTs      float64
 }
 
 // New creates a Limiter. Call Start after creation.
@@ -125,9 +129,10 @@ func New(cfg *config.Config, b bus.Bus) *Limiter {
 	}
 	l.orvd = loadORVDConfig(cfg.ComponentID, cfg.InstanceID, requestTimeout, l.proxy)
 	l.orvdStatus = ORVDStatusDisabled
+	l.orvdPhase = ORVDPhaseDisabled
 	if l.orvd.topic != "" {
-		log.Printf("[%s] ORVD enabled topic=%s action=%s drone_id=%s",
-			cfg.ComponentID, l.orvd.topic, l.orvd.action, l.orvd.droneID)
+		log.Printf("[%s] ORVD enabled topic=%s drone_id=%s",
+			cfg.ComponentID, l.orvd.topic, l.orvd.droneID)
 	}
 	l.registerHandlers()
 	return l
@@ -137,6 +142,9 @@ func (l *Limiter) registerHandlers() {
 	l.RegisterHandler("mission_load", l.handleMissionLoad)
 	l.RegisterHandler("update_config", l.handleUpdateConfig)
 	l.RegisterHandler("get_state", l.handleGetState)
+	l.RegisterHandler("orvd_takeoff", l.handleORVDTakeoff)
+	l.RegisterHandler("orvd_complete", l.handleORVDComplete)
+	l.RegisterHandler("revoke_takeoff", l.handleRevokeTakeoff)
 }
 
 // Start subscribes and starts the control loop.
@@ -152,8 +160,26 @@ func (l *Limiter) controlLoop(ctx context.Context) {
 	component.RunControlLoop(ctx, l.Running, l.controlIntervalSec, func(ctx context.Context) {
 		l.pollNavigationIfDue(ctx)
 		l.pollTelemetryIfDue(ctx)
+		l.pollORVDTelemetryIfDue(ctx)
 		l.recalculate(ctx)
 	})
+}
+
+func (l *Limiter) pollORVDTelemetryIfDue(ctx context.Context) {
+	if l.orvd.topic == "" {
+		return
+	}
+	now := float64(time.Now().UnixNano()) / 1e9
+	if !component.ShouldRunInterval(now, &l.lastORVDTelemetryTs, l.orvd.telemetryIntervalSec) {
+		return
+	}
+	l.mu.RLock()
+	nav := l.lastNav
+	l.mu.RUnlock()
+	if nav == nil {
+		return
+	}
+	l.runORVDSendTelemetry(ctx, nav)
 }
 
 func (l *Limiter) proxyRequest(ctx context.Context, targetTopic, action string) map[string]interface{} {
@@ -219,9 +245,11 @@ func (l *Limiter) handleMissionLoad(ctx context.Context, message map[string]inte
 	l.mu.Lock()
 	l.orvdStatus = ORVDStatusPending
 	l.orvdMissionID = mid
+	l.setORVDPhase(ORVDPhasePending)
+	l.orvdTakeoffAuthorized = false
 	l.mu.Unlock()
 
-	status, errMsg := l.requestORVDValidation(ctx, mission)
+	status, errMsg := l.runORVDMissionLoad(ctx, mission)
 	l.mu.Lock()
 	l.orvdStatus = status
 	l.orvdMissionID = mid
@@ -296,6 +324,90 @@ func (l *Limiter) handleUpdateConfig(ctx context.Context, message map[string]int
 	}, nil
 }
 
+func (l *Limiter) handleORVDTakeoff(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !component.IsTrustedSender(message, "security_monitor") {
+		return nil, nil
+	}
+	payload, _ := message["payload"].(map[string]interface{})
+	mid := ""
+	if payload != nil {
+		mid, _ = payload["mission_id"].(string)
+	}
+	if mid == "" {
+		l.mu.RLock()
+		mid = l.orvdMissionID
+		l.mu.RUnlock()
+	}
+	if mid == "" {
+		return map[string]interface{}{"ok": false, "error": "no_mission"}, nil
+	}
+	l.mu.RLock()
+	if l.orvdStatus != ORVDStatusAuthorized {
+		st := l.orvdStatus
+		l.mu.RUnlock()
+		return map[string]interface{}{"ok": false, "error": "orvd_not_authorized", "orvd_status": st}, nil
+	}
+	l.mu.RUnlock()
+
+	l.pollNavigationIfDue(ctx)
+	ok, _, errMsg := l.runORVDRequestTakeoff(ctx, mid)
+	if !ok {
+		if errMsg == "" {
+			errMsg = "orvd_takeoff_denied"
+		}
+		return map[string]interface{}{"ok": false, "error": errMsg}, nil
+	}
+	return map[string]interface{}{
+		"ok":                      true,
+		"orvd_takeoff_authorized": true,
+		"mission_id":              mid,
+	}, nil
+}
+
+func (l *Limiter) handleORVDComplete(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !component.IsTrustedSender(message, "security_monitor") {
+		return nil, nil
+	}
+	payload, _ := message["payload"].(map[string]interface{})
+	if payload == nil {
+		return map[string]interface{}{"ok": false, "error": "invalid_payload"}, nil
+	}
+	mid, _ := payload["mission_id"].(string)
+	result, _ := payload["result"].(string)
+	if result == "" {
+		result = "success"
+	}
+	if mid == "" {
+		l.mu.RLock()
+		mid = l.orvdMissionID
+		l.mu.RUnlock()
+	}
+	if mid == "" {
+		return map[string]interface{}{"ok": false, "error": "no_mission"}, nil
+	}
+	l.runORVDCompleteMission(ctx, mid, result)
+	return map[string]interface{}{"ok": true, "mission_id": mid}, nil
+}
+
+func (l *Limiter) handleRevokeTakeoff(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !component.IsTrustedSender(message, "orvd") {
+		return nil, nil
+	}
+	payload, _ := message["payload"].(map[string]interface{})
+	droneID := ""
+	if payload != nil {
+		droneID, _ = payload["drone_id"].(string)
+	}
+	l.logToJournal(ctx, "ORVD_REVOKE_TAKEOFF", map[string]interface{}{
+		"drone_id": droneID,
+	})
+	l.mu.Lock()
+	l.orvdTakeoffAuthorized = false
+	l.mu.Unlock()
+	l.publishOREmergencyFromORVD(ctx, "takeoff_revoked")
+	return map[string]interface{}{"ok": true, "status": "landing_required"}, nil
+}
+
 func (l *Limiter) handleGetState(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -305,6 +417,9 @@ func (l *Limiter) handleGetState(_ context.Context, _ map[string]interface{}) (m
 		"max_alt_deviation_m":      l.maxAltDeviationM,
 		"orvd_status":              l.orvdStatus,
 		"orvd_mission_id":          l.orvdMissionID,
+		"orvd_phase":               l.orvdPhase,
+		"orvd_takeoff_authorized":  l.orvdTakeoffAuthorized,
+		"mission_loaded":           l.mission != nil,
 	}, nil
 }
 
@@ -389,6 +504,8 @@ func (l *Limiter) publishEmergency(ctx context.Context, distanceM, altDev float6
 	l.mu.RLock()
 	localMaxDistanceFromPathM := l.maxDistanceFromPathM
 	localMaxAltDeviationM := l.maxAltDeviationM
+	mid := l.orvdMissionID
+	nav := l.lastNav
 	l.mu.RUnlock()
 	details := map[string]interface{}{
 		"distance_from_path_m":     distanceM,
@@ -397,6 +514,10 @@ func (l *Limiter) publishEmergency(ctx context.Context, distanceM, altDev float6
 		"max_alt_deviation_m":      localMaxAltDeviationM,
 	}
 	l.logToJournal(ctx, "LIMITER_EMERGENCY_LAND_REQUIRED", details)
+	if nav != nil && mid != "" {
+		l.reportORVDIncident(ctx, mid, "geofence_violation", "critical",
+			getFloat(nav, "lat"), getFloat(nav, "lon"))
+	}
 	eventPayload := map[string]interface{}{
 		"event":   "EMERGENCY_LAND_REQUIRED",
 		"details": details,

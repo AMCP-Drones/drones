@@ -371,6 +371,44 @@ func (a *Autopilot) checkLimiterAuthorization(ctx context.Context) string {
 	return ""
 }
 
+// requestORVDTakeoff asks limiter to call OpBD request_takeoff. Returns "" when cleared,
+// preflightPending while waiting, or an error key.
+func (a *Autopilot) requestORVDTakeoff(ctx context.Context) string {
+	a.mu.RLock()
+	mission := a.mission
+	a.mu.RUnlock()
+	if mission == nil {
+		return "no_mission"
+	}
+	mid, _ := mission["mission_id"].(string)
+	pl, err := a.proxy.ProxyRequest(ctx, a.limiterTopic, "get_state", map[string]interface{}{})
+	if err == nil {
+		if takeoff, _ := pl["orvd_takeoff_authorized"].(bool); takeoff {
+			return ""
+		}
+	}
+	resp, err := a.proxy.ProxyRequest(ctx, a.limiterTopic, "orvd_takeoff", map[string]interface{}{
+		"mission_id": mid,
+	})
+	if err != nil {
+		return "orvd_takeoff_denied"
+	}
+	if resp == nil || resp["ok"] != true {
+		return "orvd_takeoff_denied"
+	}
+	return ""
+}
+
+func (a *Autopilot) notifyORVDComplete(ctx context.Context, missionID string) {
+	if missionID == "" {
+		return
+	}
+	_, _ = a.proxy.ProxyRequest(ctx, a.limiterTopic, "orvd_complete", map[string]interface{}{
+		"mission_id": missionID,
+		"result":     "success",
+	})
+}
+
 func (a *Autopilot) requestDroneportTakeoff(ctx context.Context) string {
 	a.mu.RLock()
 	mission := a.mission
@@ -421,6 +459,19 @@ func (a *Autopilot) stepPreFlight(ctx context.Context) {
 		if a.state == StatePreFlight {
 			a.state = StateAborted
 			a.lastError = errKey
+		}
+		a.mu.Unlock()
+		return
+	}
+	takeoffErr := a.requestORVDTakeoff(ctx)
+	if takeoffErr == preflightPending {
+		return
+	}
+	if takeoffErr != "" {
+		a.mu.Lock()
+		if a.state == StatePreFlight {
+			a.state = StateAborted
+			a.lastError = takeoffErr
 		}
 		a.mu.Unlock()
 		return
@@ -483,7 +534,10 @@ func (a *Autopilot) stepControl(ctx context.Context) {
 		if a.state == StateExecuting {
 			a.state = StateCompleted
 			mid, _ := a.mission["mission_id"].(string)
+			a.mu.Unlock()
 			a.logToJournal(ctx, "AUTOPILOT_MISSION_COMPLETED", map[string]interface{}{"mission_id": mid})
+			a.notifyORVDComplete(ctx, mid)
+			return
 		}
 		a.mu.Unlock()
 		return
@@ -515,6 +569,7 @@ func (a *Autopilot) stepControl(ctx context.Context) {
 			mid, _ := a.mission["mission_id"].(string)
 			a.mu.Unlock()
 			a.logToJournal(ctx, "AUTOPILOT_MISSION_COMPLETED", map[string]interface{}{"mission_id": mid})
+			a.notifyORVDComplete(ctx, mid)
 			a.sendMotorsTarget(ctx, 0, 0, 0, alt, lat, lon, getFloat(nav, "heading_deg"), false)
 			a.sendCargo(ctx, false)
 			return

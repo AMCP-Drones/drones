@@ -1,14 +1,12 @@
 package limiter
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/AMCP-Drones/drones/systems/deliverydron/component/src"
 )
@@ -23,24 +21,23 @@ const (
 )
 
 const (
-	defaultORVDDroneID        = "drone_001"
-	defaultORVDAction         = "validate_mission"
-	defaultMaxMissionAltM     = 5000.0
-	orvdActionTakeoff         = "request_takeoff"
-	orvdStatusMissionAuth     = "mission_authorized"
-	orvdStatusTakeoffAuth     = "takeoff_authorized"
+	defaultORVDDroneID    = "drone_001"
+	defaultMaxMissionAltM = 5000.0
 )
 
 var orvdDroneIDPattern = regexp.MustCompile(`^drone_[0-9]{3,4}$`)
 
 type orvdConfig struct {
-	topic           string
-	droneID         string
-	mockSuccess     bool
-	action          string
-	requestTimeout  float64
-	maxMissionAltM  float64
-	orvdProxy       *component.ProxyClient
+	topic                  string
+	droneID                string
+	droneModel             string
+	operator               string
+	certificateID          string
+	mockSuccess            bool
+	requestTimeout         float64
+	telemetryIntervalSec   float64
+	maxMissionAltM         float64
+	orvdProxy              *component.ProxyClient
 }
 
 func loadORVDConfig(cfgComponentID string, instanceID string, requestTimeout float64, proxy *component.ProxyClient) orvdConfig {
@@ -55,14 +52,16 @@ func loadORVDConfig(cfgComponentID string, instanceID string, requestTimeout flo
 	if !orvdDroneIDPattern.MatchString(droneID) {
 		droneID = defaultORVDDroneID
 	}
-	action := strings.TrimSpace(os.Getenv("LIMITER_ORVD_ACTION"))
-	if action == "" {
-		action = defaultORVDAction
-	}
 	orvdTimeout := requestTimeout
 	if s := os.Getenv("LIMITER_ORVD_REQUEST_TIMEOUT_S"); s != "" {
 		if v, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil && v > 0 {
 			orvdTimeout = v
+		}
+	}
+	telemetryInterval := 1.0
+	if s := os.Getenv("LIMITER_ORVD_TELEMETRY_INTERVAL_S"); s != "" {
+		if v, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil && v > 0 {
+			telemetryInterval = v
 		}
 	}
 	maxMissionAlt := defaultMaxMissionAltM
@@ -79,13 +78,16 @@ func loadORVDConfig(cfgComponentID string, instanceID string, requestTimeout flo
 		TimeoutSec:           orvdTimeout,
 	}
 	return orvdConfig{
-		topic:          topic,
-		droneID:        droneID,
-		mockSuccess:    mock,
-		action:         action,
-		requestTimeout: orvdTimeout,
-		maxMissionAltM: maxMissionAlt,
-		orvdProxy:      orvdProxy,
+		topic:                topic,
+		droneID:              droneID,
+		droneModel:           strings.TrimSpace(os.Getenv("ORVD_DRONE_MODEL")),
+		operator:             strings.TrimSpace(os.Getenv("ORVD_OPERATOR")),
+		certificateID:        strings.TrimSpace(os.Getenv("ORVD_CERTIFICATE_ID")),
+		mockSuccess:          mock,
+		requestTimeout:       orvdTimeout,
+		telemetryIntervalSec: telemetryInterval,
+		maxMissionAltM:       maxMissionAlt,
+		orvdProxy:            orvdProxy,
 	}
 }
 
@@ -95,25 +97,6 @@ func parseBoolEnv(raw string) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-func stepFloat(step map[string]interface{}, key string) (float64, bool) {
-	v, ok := step[key]
-	if !ok {
-		return 0, false
-	}
-	switch x := v.(type) {
-	case float64:
-		return x, true
-	case float32:
-		return float64(x), true
-	case int:
-		return float64(x), true
-	case int64:
-		return float64(x), true
-	default:
-		return 0, false
 	}
 }
 
@@ -143,13 +126,23 @@ func validateMissionBounds(mission map[string]interface{}, maxMissionAltM float6
 	return true, ""
 }
 
-func orvdResponseAuthorized(resp map[string]interface{}) bool {
-	if resp == nil {
-		return false
+func stepFloat(step map[string]interface{}, key string) (float64, bool) {
+	v, ok := step[key]
+	if !ok {
+		return 0, false
 	}
-	status, _ := resp["status"].(string)
-	status = strings.TrimSpace(strings.ToLower(status))
-	return status == orvdStatusMissionAuth || status == orvdStatusTakeoffAuth
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	default:
+		return 0, false
+	}
 }
 
 func applyORVDConstraints(l *Limiter, resp map[string]interface{}) {
@@ -165,43 +158,4 @@ func applyORVDConstraints(l *Limiter, resp map[string]interface{}) {
 	if v, ok := constraints["max_alt_deviation_m"].(float64); ok && v > 0 {
 		l.maxAltDeviationM = v
 	}
-}
-
-func (l *Limiter) requestORVDValidation(ctx context.Context, mission map[string]interface{}) (status string, errMsg string) {
-	mid, _ := mission["mission_id"].(string)
-	if l.orvd.topic == "" {
-		return ORVDStatusAuthorized, ""
-	}
-	if l.orvd.mockSuccess {
-		l.logToJournal(ctx, "ORVD_MISSION_AUTHORIZED", map[string]interface{}{
-			"mission_id": mid,
-			"stub":       true,
-			"reason":     "LIMITER_ORVD_MOCK_SUCCESS",
-		})
-		return ORVDStatusAuthorized, ""
-	}
-	payload := map[string]interface{}{
-		"drone_id":    l.orvd.droneID,
-		"mission_id":  mid,
-		"mission":     mission,
-		"time":        time.Now().UTC().Format(time.RFC3339),
-	}
-	resp, err := l.orvd.orvdProxy.ProxyRequest(ctx, l.orvd.topic, l.orvd.action, payload)
-	if err != nil {
-		l.logToJournal(ctx, "ORVD_MISSION_DENIED", map[string]interface{}{
-			"mission_id": mid,
-			"error":      err.Error(),
-		})
-		return ORVDStatusDenied, "orvd_denied"
-	}
-	if orvdResponseAuthorized(resp) {
-		applyORVDConstraints(l, resp)
-		l.logToJournal(ctx, "ORVD_MISSION_AUTHORIZED", map[string]interface{}{"mission_id": mid})
-		return ORVDStatusAuthorized, ""
-	}
-	l.logToJournal(ctx, "ORVD_MISSION_DENIED", map[string]interface{}{
-		"mission_id": mid,
-		"response":   resp,
-	})
-	return ORVDStatusDenied, "orvd_denied"
 }
