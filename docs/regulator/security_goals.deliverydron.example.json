@@ -1,0 +1,25 @@
+{
+  "goals": {
+    "firmware": [
+      "FW-SEC-01",
+      "FW-SEC-02",
+      "FW-SEC-03",
+      "FW-SEC-05",
+      "SYS-SEC-01"
+    ],
+    "deliverydron": [
+      "FW-SEC-01",
+      "FW-SEC-02",
+      "FW-SEC-03",
+      "FW-SEC-05",
+      "SYS-SEC-01"
+    ]
+  },
+  "test_commands": {
+    "FW-SEC-01": "bash scripts/regulator/fw_sec_01.sh",
+    "FW-SEC-02": "bash scripts/regulator/fw_sec_02.sh",
+    "FW-SEC-03": "bash scripts/regulator/fw_sec_03.sh",
+    "FW-SEC-05": "bash scripts/regulator/fw_sec_05.sh",
+    "SYS-SEC-01": "bash scripts/regulator/sys_sec_01.sh"
+  }
+}

@@ -53,7 +53,7 @@ Conventions:
 - **`*_TOPIC`** — full external broker topic string.
 - **`*_DRONE_ID`** — drone identity for external APIs (`ORVD_DRONE_ID`, fallback `INSTANCE_ID` if it matches `^drone_[0-9]{3,4}$`, else `drone_001`).
 - **`LIMITER_ORVD_MOCK_SUCCESS`** — `1`/`true` skips ORVD RPC (CI / no OpBD container).
-- **`ORVD_CERTIFICATE_ID`** — optional; when set, OpBD `register_drone` verifies via regulator.
+- **`ORVD_CERTIFICATE_ID`** — set in [`docker/.env`](../docker/.env) by release CI ([firmware-cert workflow](../.github/workflows/firmware-cert.yml)); when present, OpBD `register_drone` includes `certificate_id`. See [regulator_integration.md](regulator_integration.md).
 - **Component-prefixed tuning** — `LIMITER_MAX_MISSION_ALT_M`, `LIMITER_ORVD_REQUEST_TIMEOUT_S`, `LIMITER_ORVD_TELEMETRY_INTERVAL_S`, etc.
 
 ORVD env is set on **`limiter`** and **`security_monitor`** in `docker-compose.yml` (`ORVD_TOPIC` must be present on security_monitor so `${ORVD_TOPIC}` policy substitution works).

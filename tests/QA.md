@@ -42,6 +42,8 @@ tests/
 
 ├── integration_orvd_test.go # 4 контрактных теста взаимодействия с ОрВД
 
+├── integration_regulator_test.go # firmware certification (build tag `regulator`)
+
 ├── integration_gcs_test.go # 8 интеграционных тестов взаимодействия с GCS/НУС
 
 ├── integration_droneport_test.go # 6 интеграционных тестов взаимодействия с DronePort
@@ -316,6 +318,15 @@ tests/
 | autopilot | Высокая | Не покрыт | 0% |
 | cargo | Средняя | TestModule_Cargo_OpenCloseAndRejectUntrusted, TestRegression_BAG002 | 50% (БАГ-002 закрыт) |
 | journal | Средняя | module_journal_test, TestModule_Journal_RejectsUntrustedSender, SEC-007, SEC-008 | 60% (БАГ-006 открыт) |
+
+### 4.4 Сертификация прошивки (регулятор)
+
+| Элемент | Описание |
+|---------|----------|
+| Build tag | `regulator` |
+| Файл | `integration_regulator_test.go` |
+| Запуск | Kafka + `python scripts/ci/regulator_firmware_kafka.py`, затем `REGULATOR_TEST_COMMIT=$(git rev-parse HEAD) go test -tags=regulator ./tests -run TestIntegration_Regulator -v` |
+| Release CI | `.github/workflows/firmware-cert.yml` → `ORVD_CERTIFICATE_ID` в `docker/.env` |
 
 ---
 

@@ -1,0 +1,117 @@
+name: Firmware certification
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit SHA to certify
+        required: true
+      version:
+        description: Version label (e.g. v1.0.0)
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+  REGULATOR_REPO_URL: https://github.com/AMCP-Drones/drones
+  REGULATOR_DEVELOPER_ID: AMCP-Drones
+  REGULATOR_DRONE_TYPE: DeliveryDrone-X2
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    services:
+      kafka:
+        image: bitnami/kafka:3.7
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_CFG_NODE_ID: "0"
+          KAFKA_CFG_PROCESS_ROLES: controller,broker
+          KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.commit }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve certify commit and version
+        id: meta
+        run: |
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install kafka-python
+
+      - name: Start firmware regulator (Kafka)
+        run: |
+          python scripts/ci/regulator_firmware_kafka.py &
+          echo $! > /tmp/regulator.pid
+          sleep 8
+
+      - name: Request firmware certification
+        env:
+          GITHUB_SHA: ${{ steps.meta.outputs.commit }}
+          GITHUB_REF_NAME: ${{ steps.meta.outputs.version }}
+        run: |
+          REPO_URL="${REGULATOR_REPO_URL}"
+          if [ -n "${{ secrets.GITHUB_TOKEN }}" ]; then
+            REPO_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          fi
+          go run ./cmd/regulator_cert \
+            --kafka "${KAFKA_BOOTSTRAP_SERVERS}" \
+            --repo "${REPO_URL}" \
+            --commit "${GITHUB_SHA}" \
+            --version "${GITHUB_REF_NAME}" \
+            --env-file docker/.env \
+            --cert-out data/firmware_certificate.json
+
+      - name: Verify docker/.env
+        run: |
+          grep -q '^ORVD_CERTIFICATE_ID=CERT-' docker/.env
+
+      - name: Stop regulator
+        if: always()
+        run: |
+          if [ -f /tmp/regulator.pid ]; then
+            kill "$(cat /tmp/regulator.pid)" 2>/dev/null || true
+          fi
+
+      - name: Commit certificate to release ref
+        if: github.event_name == 'release'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docker/.env data/firmware_certificate.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(release): set ORVD_CERTIFICATE_ID for ${{ github.event.release.tag_name }}"
+          git push origin "HEAD:refs/tags/${{ github.event.release.tag_name }}"
