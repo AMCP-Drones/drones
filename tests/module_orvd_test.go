@@ -8,6 +8,7 @@ import (
 
 	"github.com/AMCP-Drones/drones/systems/deliverydron/autopilot/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/limiter/src"
+	emergency "github.com/AMCP-Drones/drones/systems/deliverydron/emergency/src"
 	missionhandler "github.com/AMCP-Drones/drones/systems/deliverydron/mission_handler/src"
 	securitymonitor "github.com/AMCP-Drones/drones/systems/deliverydron/security_monitor/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/tests/testutil"
@@ -23,6 +24,8 @@ func orvdPolicies(prefix, orvdTopic string) string {
 		{"sender": "limiter", "topic": prefix + ".journal", "action": "LOG_EVENT"},
 		{"sender": "limiter", "topic": prefix + ".emergency", "action": "limiter_event"},
 		{"sender": "autopilot", "topic": prefix + ".limiter", "action": "get_state"},
+		{"sender": "autopilot", "topic": prefix + ".emergency", "action": "droneport_takeoff"},
+		{"sender": "emergency", "topic": prefix + ".journal", "action": "LOG_EVENT"},
 		{"sender": "orvd", "topic": prefix + ".limiter", "action": "update_config"},
 		{"sender": "autopilot", "topic": prefix + ".navigation", "action": "get_state"},
 		{"sender": "autopilot", "topic": prefix + ".motors", "action": "SET_TARGET"},
@@ -58,6 +61,7 @@ func startORVDStack(t *testing.T, orvdTopic string, stubAutopilot bool, orvdHand
 	t.Setenv("ORVD_TOPIC", orvdTopic)
 	t.Setenv("JOURNAL_FILE_PATH", t.TempDir()+"/orvd_journal.ndjson")
 	t.Setenv("LIMITER_ORVD_MOCK_SUCCESS", "0")
+	t.Setenv("EMERGENCY_DRONEPORT_MOCK_SUCCESS", "1")
 	t.Setenv("LIMITER_CONTROL_INTERVAL_S", "60")
 	t.Setenv("LIMITER_NAV_POLL_INTERVAL_S", "60")
 	t.Setenv("LIMITER_TELEMETRY_POLL_INTERVAL_S", "60")
@@ -132,6 +136,12 @@ func startORVDStack(t *testing.T, orvdTopic string, stubAutopilot bool, orvdHand
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = mh.Stop(ctx) })
+
+	em := emergency.New(testutil.Config("emergency"), mem)
+	if err := em.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = em.Stop(ctx) })
 
 	ap := autopilot.New(testutil.Config("autopilot"), mem)
 	if err := ap.Start(ctx); err != nil {

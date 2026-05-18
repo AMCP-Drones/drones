@@ -77,11 +77,16 @@ func New(cfg *config.Config, b bus.Bus) *SecurityMonitor {
 	if orvdTopic == "" {
 		orvdTopic = strings.TrimSpace(os.Getenv("ORVD_EXTERNAL_TOPIC"))
 	}
+	droneportTopic := strings.TrimSpace(os.Getenv("DRONEPORT_TOPIC"))
+	if droneportTopic == "" {
+		droneportTopic = strings.TrimSpace(os.Getenv("DRONEPORT_EXTERNAL_TOPIC"))
+	}
 	rawPolicies = strings.ReplaceAll(rawPolicies, "${TOPIC_PREFIX}", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "${SYSTEM_NAME}", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "$${SYSTEM_NAME}", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "$SYSTEM_NAME", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "${ORVD_TOPIC}", orvdTopic)
+	rawPolicies = strings.ReplaceAll(rawPolicies, "${DRONEPORT_TOPIC}", droneportTopic)
 	policyAdmin := strings.TrimSpace(os.Getenv("POLICY_ADMIN_SENDER"))
 	timeout := 10.0
 	if t := os.Getenv("SECURITY_MONITOR_PROXY_REQUEST_TIMEOUT_S"); t != "" {

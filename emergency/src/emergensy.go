@@ -21,6 +21,7 @@ type Emergency struct {
 	cargoTopic      string
 	proxy           *component.ProxyClient
 	audit           *component.AuditLogger
+	droneport       droneportConfig
 	active          bool
 }
 
@@ -62,13 +63,44 @@ func New(cfg *config.Config, b bus.Bus) *Emergency {
 		JournalTopic: journalTopic,
 		Source:       "emergency",
 	}
+	e.droneport = loadDroneportConfig(cfg.InstanceID, e.proxy)
 	e.registerHandlers()
 	return e
 }
 
 func (e *Emergency) registerHandlers() {
 	e.RegisterHandler("limiter_event", e.handleLimiterEvent)
+	e.RegisterHandler("droneport_takeoff", e.handleDroneportTakeoff)
+	e.RegisterHandler("droneport_event", e.handleDroneportEvent)
 	e.RegisterHandler("get_state", e.handleGetState)
+}
+
+func (e *Emergency) handleDroneportTakeoff(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !component.IsTrustedSender(message, "security_monitor") {
+		return nil, nil
+	}
+	payload, _ := message["payload"].(map[string]interface{})
+	if payload == nil {
+		return map[string]interface{}{"ok": false, "error": "invalid_payload"}, nil
+	}
+	mid, _ := payload["mission_id"].(string)
+	ok, _ := e.requestDroneportTakeoff(ctx, mid)
+	if !ok {
+		return map[string]interface{}{"ok": false, "error": "droneport_denied"}, nil
+	}
+	return map[string]interface{}{"ok": true}, nil
+}
+
+func (e *Emergency) handleDroneportEvent(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+	if !component.IsTrustedSender(message, "droneport") && !component.IsTrustedSender(message, "security_monitor") {
+		return nil, nil
+	}
+	payload, _ := message["payload"].(map[string]interface{})
+	if payload == nil {
+		return map[string]interface{}{"ok": false, "error": "invalid_payload"}, nil
+	}
+	e.logToJournal(ctx, "DRONEPORT_EVENT_RECEIVED", payload)
+	return map[string]interface{}{"ok": true}, nil
 }
 
 func (e *Emergency) handleLimiterEvent(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {

@@ -57,6 +57,7 @@ type Autopilot struct {
 	motorsTopic        string
 	cargoTopic         string
 	limiterTopic       string
+	emergencyTopic     string
 	controlIntervalSec    float64
 	navPollIntervalSec    float64
 	requestTimeoutSec     float64
@@ -98,6 +99,10 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 	if limiterTopic == "" {
 		limiterTopic = cfg.BrokerTopicFor("limiter")
 	}
+	emergencyTopic := strings.TrimSpace(os.Getenv("EMERGENCY_TOPIC"))
+	if emergencyTopic == "" {
+		emergencyTopic = cfg.BrokerTopicFor("emergency")
+	}
 	controlInterval := 0.2
 	navPollInterval := 0.1
 	requestTimeout := 5.0
@@ -126,6 +131,7 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 		motorsTopic:        motorsTopic,
 		cargoTopic:         cargoTopic,
 		limiterTopic:       limiterTopic,
+		emergencyTopic:     emergencyTopic,
 		controlIntervalSec:  controlInterval,
 		navPollIntervalSec:  navPollInterval,
 		requestTimeoutSec:   requestTimeout,
@@ -365,6 +371,26 @@ func (a *Autopilot) checkLimiterAuthorization(ctx context.Context) string {
 	return ""
 }
 
+func (a *Autopilot) requestDroneportTakeoff(ctx context.Context) string {
+	a.mu.RLock()
+	mission := a.mission
+	a.mu.RUnlock()
+	if mission == nil {
+		return "no_mission"
+	}
+	mid, _ := mission["mission_id"].(string)
+	pl, err := a.proxy.ProxyRequest(ctx, a.emergencyTopic, "droneport_takeoff", map[string]interface{}{
+		"mission_id": mid,
+	})
+	if err != nil {
+		return "droneport_denied"
+	}
+	if pl == nil || pl["ok"] != true {
+		return "droneport_denied"
+	}
+	return ""
+}
+
 func (a *Autopilot) stepPreFlight(ctx context.Context) {
 	a.mu.RLock()
 	state := a.state
@@ -395,6 +421,15 @@ func (a *Autopilot) stepPreFlight(ctx context.Context) {
 		if a.state == StatePreFlight {
 			a.state = StateAborted
 			a.lastError = errKey
+		}
+		a.mu.Unlock()
+		return
+	}
+	if dpErr := a.requestDroneportTakeoff(ctx); dpErr != "" {
+		a.mu.Lock()
+		if a.state == StatePreFlight {
+			a.state = StateAborted
+			a.lastError = dpErr
 		}
 		a.mu.Unlock()
 		return
