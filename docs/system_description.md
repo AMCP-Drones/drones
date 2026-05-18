@@ -1,6 +1,6 @@
 # Описание системы и кибериммунной архитектуры (актуализация)
 
-Дата актуализации: 11 мая 2026
+Дата актуализации: 18 мая 2026
 
 ---
 
@@ -82,6 +82,8 @@ flowchart TD
 
 ## 2) Архитектура политики, уровни доверия и оценка доменов
 
+**Артефакты по ТЗ:** [БТ3 — активы и домены](bts3_assets_and_trust_model.md) · [БТ6 — целостность и зависимости](bts6_integrity_coverage_and_dependencies.md) · [Защита топиков брокера](broker_topic_auth.md)
+
 ### 2.1 Архитектура политики
 
 - `security_monitor` реализует policy enforcement для `proxy_request`/`proxy_publish`.
@@ -117,15 +119,15 @@ flowchart TD
 
 #### ДВБ для текущих ЦБПБ (message-control + trusted executors TCB)
 
-- `security_monitor` — 617 LOC (высокая сложность)
-- `component` — 278 LOC (средняя сложность)
-- `config` — 155 LOC (низкая/средняя сложность)
-- `journal` — 188 LOC (средняя сложность)
-- `navigation` — 139 LOC (низкая/средняя сложность)
-- `motors` — 206 LOC (средняя сложность)
-- `cargo` — 151 LOC (низкая/средняя сложность)
+- `security_monitor` — 617 LOC (87%) (высокая сложность)
+- `component` — 278 LOC (80%) (средняя сложность)
+- `config` — 155 LOC (99%) (низкая/средняя сложность)
+- `journal` — 188 LOC (81%) (средняя сложность)
+- `navigation` — 139 LOC (90%) (низкая/средняя сложность)
+- `motors` — 206 LOC (84%) (средняя сложность)
+- `cargo` — 151 LOC (93%) (низкая/средняя сложность)
 
-**Итого ДВБ: 1734 LOC**
+**Итого ДВБ: 1734 LOC (88% покрыто тестами)**
 
 #### Вне ДВБ в текущей постановке ЦБПБ
 
@@ -146,6 +148,21 @@ flowchart TD
 5. **Defense in Depth (внутри message-control + executors контура)**  
    Policy check + exact sender match + isolation mode + trusted executors + audit trail.
 
+### 3.1 Сопоставление с ГОСТ Р 72118—2025 (приложение А)
+
+Реализованные шаблоны приложения А и их привязка к коду:
+
+| Шаблон ГОСТ | Реализация |
+|-------------|------------|
+| **A.1** Монитор | `limiter` — опрос navigation/telemetry, `limiter_event`; `emergency` — изоляция, cargo, LAND; `journal` — запись событий |
+| **A.2** Раздельное принятие и применение решений | `security_monitor`: политика `(sender, topic, action)`, allow/deny; применение — `proxy_request` / `proxy_publish` через `component.ProxyClient` |
+| **A.3** Иерархия доверия | Уровни L0–L4 (§2.2), проверка `IsTrustedSender`, фиксированный отправитель `security_monitor` для исполнителей |
+| **A.5** Обработка входных данных | `mission_handler` — разбор и проверка WPL/JSON; `limiter` — геозоны и ограничения миссии |
+| **A.6** Механизм состояния безопасности | `NORMAL` / `ISOLATED`, `ISOLATION_START` / `ISOLATION_END`, аварийные политики, watchdog в `security_monitor` |
+| **A.9** Безопасная регистрация | `journal`: `LOG_EVENT` только от `security_monitor`, NDJSON, `inferSeverity`, пересылка в DroneAnalytics |
+
+Паттерны §3: Reference Monitor / PEP и mediation-only → **A.2**; fail-safe default; Dedicated Safety-State → **A.6**; Defense in Depth — `security_monitor` + политики + `limiter` + `journal` + isolation.
+
 ---
 
 ## Проверка соответствия политик архитектуре
@@ -161,3 +178,58 @@ flowchart TD
 - переход в `ISOLATED` и аварийные разрешения;
 - восстановление в `NORMAL` (`ISOLATION_END`);
 - контроль trusted sender и журналирование security-событий.
+
+---
+
+## 4) Покрытие тестами по компонентам
+
+Метрика: **покрытие операторов (statements)** в пакетах `*/src` (без `cmd/*` и `tests/e2e`).  
+Профили интеграционных (`./tests`) и модульных (`*/src/*_test.go`) тестов объединяются через `gocovmerge`.
+
+Дата замера: 18 мая 2026.
+
+| Компонент | Покрытие | Покрыто / всего |
+|-----------|----------|-----------------|
+| emergency | 73.4% | 282 / 384 |
+| limiter | 78.6% | 408 / 519 |
+| autopilot | 79.1% | 318 / 402 |
+| mission_handler | 79.7% | 161 / 202 |
+| component | 80.2% | 85 / 106 |
+| journal | 81.2% | 78 / 96 |
+| motors | 83.5% | 96 / 115 |
+| security_monitor | 87.3% | 268 / 307 |
+| telemetry | 87.8% | 137 / 156 |
+| navigation | 89.6% | 43 / 48 |
+| sdk | 91.6% | 76 / 83 |
+| cargo | 93.2% | 41 / 44 |
+| delivery | 93.2% | 41 / 44 |
+| config | 98.8% | 79 / 80 |
+| bus | 100.0% | 14 / 14 |
+| **Итого** | **81.8%** | **2127 / 2600** |
+
+Компоненты ниже целевого порога 80%: `emergency`, `limiter`, `autopilot`, `mission_handler`.
+
+### Воспроизведение замера
+
+```bash
+export PATH="$HOME/go/bin:$PATH"   # gocovmerge: go install github.com/wadey/gocovmerge@latest
+
+COVERPKG=$(go list ./... | grep '/src$' | grep -v e2e | tr '\n' ',' | sed 's/,$//')
+
+go test ./tests -count=1 -timeout 120s \
+  -coverprofile=/tmp/cov_int.out -covermode=count -coverpkg="$COVERPKG"
+
+go test ./bus/src ./component/src ./config/src ./sdk/src ./journal/src \
+  ./telemetry/src ./motors/src ./emergency/src ./autopilot/src \
+  ./limiter/src ./mission_handler/src -count=1 -timeout 90s \
+  -coverprofile=/tmp/cov_unit.out -covermode=count -coverpkg="$COVERPKG"
+
+gocovmerge /tmp/cov_int.out /tmp/cov_unit.out > coverage_merged.out
+go tool cover -func=coverage_merged.out | tail -1
+```
+
+Запуск всех тестов (без e2e):
+
+```bash
+go test $(go list ./... | grep -v e2e) -count=1 -timeout 120s
+```
