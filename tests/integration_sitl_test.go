@@ -38,14 +38,40 @@ func mqttCfg(id string) *config.Config {
 	}
 }
 
+const testSITLDroneID = "drone_001"
+
 func setupEnv() {
 	os.Setenv("SITL_MODE", "mock")
 	os.Setenv("SITL_COMMANDS_TOPIC", "sitl.commands")
+	os.Setenv("SITL_DRONE_ID", testSITLDroneID)
 }
 
 func cleanupEnv() {
 	os.Unsetenv("SITL_MODE")
 	os.Unsetenv("SITL_COMMANDS_TOPIC")
+	os.Unsetenv("SITL_DRONE_ID")
+}
+
+func isSITLSchemaCommand(msg map[string]interface{}) bool {
+	if msg == nil {
+		return false
+	}
+	_, hasDrone := msg["drone_id"].(string)
+	_, hasVX := msg["vx"]
+	_, hasVY := msg["vy"]
+	_, hasVZ := msg["vz"]
+	_, hasHeading := msg["mag_heading"]
+	return hasDrone && hasVX && hasVY && hasVZ && hasHeading
+}
+
+func isSITLLandCommand(msg map[string]interface{}) bool {
+	if !isSITLSchemaCommand(msg) {
+		return false
+	}
+	return getFloatVal(msg, "vx") == 0 &&
+		getFloatVal(msg, "vy") == 0 &&
+		getFloatVal(msg, "vz") == -0.5 &&
+		getFloatVal(msg, "mag_heading") == 0
 }
 
 func separator(title string) {
@@ -285,40 +311,28 @@ func TestSITL_R001_MotorsCommands(t *testing.T) {
 	}
 
 	cmd := msgs[0]
-	source, _ := cmd["source"].(string)
-	checkPass(t, source == "motors", "source = motors", fmt.Sprintf("получено: %q", source))
-	if source != "motors" {
-		passed = false
-	}
-
-	command, ok := cmd["command"].(map[string]interface{})
-	checkPass(t, ok, "command присутствует", "")
-	if !ok {
+	checkPass(t, isSITLSchemaCommand(cmd), "команда в формате SITL schema", fmt.Sprintf("получено: %+v", cmd))
+	if !isSITLSchemaCommand(cmd) {
 		printTestStatus("SITL-R-001", false)
 		return
 	}
 
-	cmdType, _ := command["cmd"].(string)
-	checkPass(t, cmdType == "SET_TARGET", "cmd = SET_TARGET", fmt.Sprintf("получено: %q", cmdType))
-	if cmdType != "SET_TARGET" {
+	droneID, _ := cmd["drone_id"].(string)
+	checkPass(t, droneID == testSITLDroneID, "drone_id корректен",
+		fmt.Sprintf("ожидалось: %s, получено: %q", testSITLDroneID, droneID))
+	if droneID != testSITLDroneID {
 		passed = false
 	}
 
-	target, tok := command["target"].(map[string]interface{})
-	checkPass(t, tok, "target присутствует", "")
-	if tok {
-		vx := getFloatVal(target, "vx")
-		vy := getFloatVal(target, "vy")
-		vz := getFloatVal(target, "vz")
-		alt := getFloatVal(target, "alt_m")
-		checkPass(t, vx == 5.0, "vx = 5.0", fmt.Sprintf("получено: %.1f", vx))
-		checkPass(t, vy == 3.0, "vy = 3.0", fmt.Sprintf("получено: %.1f", vy))
-		checkPass(t, vz == 1.0, "vz = 1.0", fmt.Sprintf("получено: %.1f", vz))
-		checkPass(t, alt == 100.0, "alt_m = 100.0", fmt.Sprintf("получено: %.1f", alt))
-		if vx != 5.0 || vy != 3.0 || vz != 1.0 || alt != 100.0 {
-			passed = false
-		}
-	} else {
+	vx := getFloatVal(cmd, "vx")
+	vy := getFloatVal(cmd, "vy")
+	vz := getFloatVal(cmd, "vz")
+	magHeading := getFloatVal(cmd, "mag_heading")
+	checkPass(t, vx == 5.0, "vx = 5.0", fmt.Sprintf("получено: %.1f", vx))
+	checkPass(t, vy == 3.0, "vy = 3.0", fmt.Sprintf("получено: %.1f", vy))
+	checkPass(t, vz == 1.0, "vz = 1.0", fmt.Sprintf("получено: %.1f", vz))
+	checkPass(t, magHeading == 45.0, "mag_heading = 45.0", fmt.Sprintf("получено: %.1f", magHeading))
+	if vx != 5.0 || vy != 3.0 || vz != 1.0 || magHeading != 45.0 {
 		passed = false
 	}
 
@@ -393,16 +407,8 @@ func TestSITL_R002_LandCommand(t *testing.T) {
 		return
 	}
 
-	command, ok := msgs[0]["command"].(map[string]interface{})
-	checkPass(t, ok, "command присутствует", "")
-	if !ok {
-		printTestStatus("SITL-R-002", false)
-		return
-	}
-
-	cmdType, _ := command["cmd"].(string)
-	checkPass(t, cmdType == "LAND", "cmd = LAND", fmt.Sprintf("получено: %q", cmdType))
-	if cmdType != "LAND" {
+	checkPass(t, isSITLLandCommand(msgs[0]), "LAND как vz=-0.5", fmt.Sprintf("получено: %+v", msgs[0]))
+	if !isSITLLandCommand(msgs[0]) {
 		passed = false
 	}
 
@@ -511,22 +517,22 @@ func TestSITL_R003_FullFlightCycle(t *testing.T) {
 		passed = false
 	}
 
-	var cmdTypes []string
+	schemaCount := 0
 	for _, m := range msgs {
-		if cmd, ok := m["command"].(map[string]interface{}); ok {
-			if ct, _ := cmd["cmd"].(string); ct != "" {
-				cmdTypes = append(cmdTypes, ct)
-			}
+		if isSITLSchemaCommand(m) {
+			schemaCount++
 		}
 	}
-	fmt.Printf("  Типы команд: %v\n", cmdTypes)
-
-	lastCmd := "NONE"
-	if len(cmdTypes) > 0 {
-		lastCmd = cmdTypes[len(cmdTypes)-1]
+	fmt.Printf("  Команд в формате SITL schema: %d\n", schemaCount)
+	checkPass(t, schemaCount == expected, "все команды в формате SITL schema",
+		fmt.Sprintf("получено: %d", schemaCount))
+	if schemaCount != expected {
+		passed = false
 	}
-	checkPass(t, lastCmd == "LAND", fmt.Sprintf("Последняя команда = %s", lastCmd), fmt.Sprintf("получено: %s", lastCmd))
-	if lastCmd != "LAND" {
+
+	checkPass(t, isSITLLandCommand(msgs[len(msgs)-1]), "последняя команда — LAND (vz=-0.5)",
+		fmt.Sprintf("получено: %+v", msgs[len(msgs)-1]))
+	if !isSITLLandCommand(msgs[len(msgs)-1]) {
 		passed = false
 	}
 
@@ -1060,16 +1066,8 @@ func TestSITL_R007_TelemetryFeedback(t *testing.T) {
 		return
 	}
 
-	command, ok := sitlCmd["command"].(map[string]interface{})
-	checkPass(t, ok, "command присутствует", "")
-	if !ok {
-		printTestStatus("SITL-R-007", false)
-		return
-	}
-
-	target, ok := command["target"].(map[string]interface{})
-	checkPass(t, ok, "target присутствует", "")
-	if !ok {
+	checkPass(t, isSITLSchemaCommand(sitlCmd), "команда в формате SITL schema", "")
+	if !isSITLSchemaCommand(sitlCmd) {
 		printTestStatus("SITL-R-007", false)
 		return
 	}
@@ -1164,28 +1162,28 @@ func TestSITL_R007_TelemetryFeedback(t *testing.T) {
 		passed = false
 	}
 
-	targetVx := getFloatVal(target, "vx")
-	targetVy := getFloatVal(target, "vy")
-	targetVz := getFloatVal(target, "vz")
-	targetAlt := getFloatVal(target, "alt_m")
+	sitlVx := getFloatVal(sitlCmd, "vx")
+	sitlVy := getFloatVal(sitlCmd, "vy")
+	sitlVz := getFloatVal(sitlCmd, "vz")
+	sitlHeading := getFloatVal(sitlCmd, "mag_heading")
 
-	checkPass(t, targetVx == testVx, "SITL получил vx",
-		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testVx, targetVx))
-	checkPass(t, targetVy == testVy, "SITL получил vy",
-		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testVy, targetVy))
-	checkPass(t, targetVz == testVz, "SITL получил vz",
-		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testVz, targetVz))
-	checkPass(t, targetAlt == testAlt, "SITL получил alt_m",
-		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testAlt, targetAlt))
+	checkPass(t, sitlVx == testVx, "SITL получил vx",
+		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testVx, sitlVx))
+	checkPass(t, sitlVy == testVy, "SITL получил vy",
+		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testVy, sitlVy))
+	checkPass(t, sitlVz == testVz, "SITL получил vz",
+		fmt.Sprintf("ожидалось: %.1f, получено: %.1f", testVz, sitlVz))
+	checkPass(t, sitlHeading == 45.0, "SITL получил mag_heading",
+		fmt.Sprintf("ожидалось: 45.0, получено: %.1f", sitlHeading))
 
-	if targetVx != testVx || targetVy != testVy || targetVz != testVz || targetAlt != testAlt {
+	if sitlVx != testVx || sitlVy != testVy || sitlVz != testVz || sitlHeading != 45.0 {
 		passed = false
 	}
 
 	fmt.Println()
 	fmt.Println("  === ИТОГ: Полный цикл обратной связи ===")
 	fmt.Println("  motors → sitl.commands : корректно")
-	fmt.Println("  SITL target значения    : корректны")
+	fmt.Println("  SITL velocity/heading   : корректны")
 	if gotCoords {
 		fmt.Println("  SITL → navigation       : координаты получены")
 	} else {
@@ -1661,18 +1659,15 @@ func TestSITL_R010_InvalidCommands(t *testing.T) {
 	rawMsgs := collectMessages(rawCh, 1*time.Second)
 	motorsSentToSITL := false
 	for _, msg := range rawMsgs {
-		if cmd, ok := msg["command"].(map[string]interface{}); ok {
-			if target, ok := cmd["target"].(map[string]interface{}); ok {
-				if _, hasVx := target["vx"]; !hasVx {
-					fmt.Printf("  ⚠️ motors отправил в SITL команду без vx: %+v\n", target)
-				} else {
-					motorsSentToSITL = true
-				}
+		if isSITLSchemaCommand(msg) {
+			motorsSentToSITL = true
+			if getFloatVal(msg, "vx") != 0 {
+				fmt.Printf("  SITL vx (default 0): %.1f\n", getFloatVal(msg, "vx"))
 			}
 		}
 	}
 	if !motorsSentToSITL {
-		fmt.Printf("  ⚠️ ни одна команда не содержит vx\n")
+		fmt.Printf("  ⚠️ motors не опубликовал SITL-команду (vy/vz/alt без vx → vx=0)\n")
 	}
 	fmt.Printf("  Raw команд в sitl.commands: %d\n", len(rawMsgs))
 	checkPass(t, len(rawMsgs) >= 0, "motors не упал при отсутствии vx", "")
@@ -1697,14 +1692,10 @@ func TestSITL_R010_InvalidCommands(t *testing.T) {
 
 	rawMsgs = collectMessages(rawCh, 1*time.Second)
 	fmt.Printf("  Raw команд в sitl.commands: %d\n", len(rawMsgs))
-	for _, msg := range rawMsgs {
-		if cmd, ok := msg["command"].(map[string]interface{}); ok {
-			if target, ok := cmd["target"].(map[string]interface{}); ok {
-				if vxVal, hasVx := target["vx"]; hasVx {
-					fmt.Printf("  vx в SITL команде: %v (тип: %T)\n", vxVal, vxVal)
-				}
-			}
-		}
+	checkPass(t, len(rawMsgs) == 0, "невалидный vx не попал в sitl.commands",
+		fmt.Sprintf("получено: %d", len(rawMsgs)))
+	if len(rawMsgs) > 0 {
+		passed = false
 	}
 
 	checkPass(t, true, "motors не упал при строке вместо числа", "")
@@ -1747,14 +1738,7 @@ func TestSITL_R010_InvalidCommands(t *testing.T) {
 	rawMsgs = collectMessages(rawCh, 1*time.Second)
 	fmt.Printf("  Raw команд в sitl.commands: %d\n", len(rawMsgs))
 
-	unknownCmdSent := false
-	for _, msg := range rawMsgs {
-		if cmd, ok := msg["command"].(map[string]interface{}); ok {
-			if cmdType, _ := cmd["cmd"].(string); cmdType == "FLY_TO_MOON" {
-				unknownCmdSent = true
-			}
-		}
-	}
+	unknownCmdSent := len(rawMsgs) > 0
 	checkPass(t, !unknownCmdSent, "FLY_TO_MOON не отправлен в SITL",
 		"неизвестный action должен игнорироваться")
 	if unknownCmdSent {

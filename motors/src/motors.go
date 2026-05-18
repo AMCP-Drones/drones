@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +23,12 @@ const (
 	ModeIDLE     = "IDLE"
 	ModeTRACKING = "TRACKING"
 	ModeLANDING  = "LANDING"
+
+	defaultSITLDroneID = "drone_001"
+	sitlLandVz         = -0.5
 )
+
+var sitlDroneIDPattern = regexp.MustCompile(`^drone_[0-9]{3,4}$`)
 
 // Motors implements the motors actuator. Commands only from security_monitor.
 type Motors struct {
@@ -29,6 +36,7 @@ type Motors struct {
 	systemName string
 	sitlTopic  string
 	sitlMode   string
+	droneID    string
 	mu         sync.RWMutex
 	mode       string
 	lastTarget map[string]interface{}
@@ -49,12 +57,19 @@ func New(cfg *config.Config, b bus.Bus) *Motors {
 	base := component.NewBaseComponent(cfg.ComponentID, "motors", topic, b)
 	sitlTopic := strings.TrimSpace(os.Getenv("SITL_COMMANDS_TOPIC"))
 	if sitlTopic == "" {
-		// Flat simulator command topic (common for SITL-style bridges)
 		sitlTopic = "sitl.commands"
 	}
 	sitlMode := strings.TrimSpace(strings.ToLower(os.Getenv("SITL_MODE")))
 	if sitlMode == "" {
 		sitlMode = "mock"
+	}
+	droneID := strings.TrimSpace(os.Getenv("SITL_DRONE_ID"))
+	if droneID == "" {
+		droneID = defaultSITLDroneID
+	}
+	if !sitlDroneIDPattern.MatchString(droneID) {
+		log.Printf("[%s] invalid SITL_DRONE_ID %q, using %s", cfg.ComponentID, droneID, defaultSITLDroneID)
+		droneID = defaultSITLDroneID
 	}
 	tempC := 25.0
 	if t := os.Getenv("MOTORS_TEMPERATURE_C_DEFAULT"); t != "" {
@@ -67,6 +82,7 @@ func New(cfg *config.Config, b bus.Bus) *Motors {
 		systemName:    systemName,
 		sitlTopic:     sitlTopic,
 		sitlMode:      sitlMode,
+		droneID:       droneID,
 		mode:          ModeIDLE,
 		lastTarget:    nil,
 		lastCmdTs:     0,
@@ -94,13 +110,17 @@ func (m *Motors) handleSetTarget(_ context.Context, message map[string]interface
 	if err != nil {
 		return map[string]interface{}{"ok": false, "error": err.Error()}, nil
 	}
+	sitlCmd, err := targetToSITLCommand(m.droneID, target)
+	if err != nil {
+		return map[string]interface{}{"ok": false, "error": err.Error()}, nil
+	}
 	m.mu.Lock()
 	m.lastTarget = target
 	m.mode = ModeTRACKING
 	m.lastCmdTs = float64(time.Now().UnixNano()) / 1e9
 	mode := m.mode
 	m.mu.Unlock()
-	m.emitSITL(context.Background(), map[string]interface{}{"cmd": "SET_TARGET", "target": target})
+	m.emitSITL(context.Background(), sitlCmd)
 	return map[string]interface{}{"ok": true, "mode": mode}, nil
 }
 
@@ -113,7 +133,7 @@ func (m *Motors) handleLand(_ context.Context, message map[string]interface{}) (
 	m.lastCmdTs = float64(time.Now().UnixNano()) / 1e9
 	mode := m.mode
 	m.mu.Unlock()
-	m.emitSITL(context.Background(), map[string]interface{}{"cmd": "LAND"})
+	m.emitSITL(context.Background(), landSITLCommand(m.droneID))
 	return map[string]interface{}{"ok": true, "mode": mode}, nil
 }
 
@@ -126,21 +146,82 @@ func (m *Motors) handleGetState(_ context.Context, _ map[string]interface{}) (ma
 		"last_cmd_ts":   m.lastCmdTs,
 		"temperature_c": m.tempC,
 		"sitl_mode":     m.sitlMode,
+		"sitl_drone_id": m.droneID,
 	}
 	return out, nil
 }
 
-func (m *Motors) emitSITL(ctx context.Context, command map[string]interface{}) {
-	msg := map[string]interface{}{
-		"source":  "motors",
-		"command": command,
-	}
+func (m *Motors) emitSITL(ctx context.Context, sitlCmd map[string]interface{}) {
 	if m.sitlMode != "mock" {
-		msg["note"] = "sitl_mode=" + m.sitlMode + " not implemented, emitted as mock"
+		log.Printf("[%s] sitl_mode=%s: publishing schema command to %s", m.ComponentID, m.sitlMode, m.sitlTopic)
 	}
-	if err := m.Bus.Publish(ctx, m.sitlTopic, msg); err != nil {
+	if err := m.Bus.Publish(ctx, m.sitlTopic, sitlCmd); err != nil {
 		log.Printf("[%s] SITL publish: %v", m.ComponentID, err)
 	}
+}
+
+func landSITLCommand(droneID string) map[string]interface{} {
+	return map[string]interface{}{
+		"drone_id":    droneID,
+		"vx":          0.0,
+		"vy":          0.0,
+		"vz":          sitlLandVz,
+		"mag_heading": 0.0,
+	}
+}
+
+func targetToSITLCommand(droneID string, target map[string]interface{}) (map[string]interface{}, error) {
+	vx, hasVX := floatFromMap(target, "vx")
+	vy, hasVY := floatFromMap(target, "vy")
+	vz, hasVZ := floatFromMap(target, "vz")
+	heading, hasHeading := floatFromMap(target, "heading_deg")
+	speed, hasSpeed := floatFromMap(target, "ground_speed_mps")
+
+	if !hasVX && !hasVY && hasHeading && hasSpeed {
+		rad := heading * math.Pi / 180
+		vx = speed * math.Sin(rad)
+		vy = speed * math.Cos(rad)
+		hasVX, hasVY = true, true
+	}
+	if !hasVX {
+		vx = 0
+	}
+	if !hasVY {
+		vy = 0
+	}
+	if !hasVZ {
+		vz = 0
+	}
+	if !hasHeading {
+		heading = 0
+	}
+
+	return map[string]interface{}{
+		"drone_id":    droneID,
+		"vx":          clamp(vx, -50, 50),
+		"vy":          clamp(vy, -50, 50),
+		"vz":          clamp(vz, -10, 10),
+		"mag_heading": clamp(heading, 0, 359.9),
+	}, nil
+}
+
+func floatFromMap(m map[string]interface{}, key string) (float64, bool) {
+	v, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	f, ok := toFloat(v)
+	return f, ok
+}
+
+func clamp(v, min, max float64) float64 {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
 }
 
 func sanitizeTarget(payload map[string]interface{}) (map[string]interface{}, error) {

@@ -53,11 +53,11 @@ func New(broker string, port int, clientID string, qos int, username, password s
 }
 
 func (b *Bus) topicToMQTT(topic string) string {
-	return strings.ReplaceAll(topic, ".", "/")
+	return topic
 }
 
 func (b *Bus) mqttToTopic(mqttTopic string) string {
-	return strings.ReplaceAll(mqttTopic, "/", ".")
+	return mqttTopic
 }
 
 func (b *Bus) getClient(_ context.Context) (mqtt.Client, error) {
