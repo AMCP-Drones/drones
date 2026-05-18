@@ -123,6 +123,31 @@ func (m *MissionHandler) handleLoadMission(ctx context.Context, message map[stri
 	mid, _ := mission["mission_id"].(string)
 	m.logToJournal(ctx, "MISSION_HANDLER_MISSION_RECEIVED", map[string]interface{}{"mission_id": mid})
 
+	limiterResp, err := m.proxy.ProxyRequest(ctx, m.limiterTopic, "mission_load", map[string]interface{}{"mission": mission})
+	if err != nil {
+		m.mu.Lock()
+		m.lastError = "limiter_no_response"
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_LIMITER_ERROR", map[string]interface{}{
+			"error": "limiter_no_response", "mission_id": mid,
+		})
+		return map[string]interface{}{"ok": false, "error": "limiter_no_response"}, nil
+	}
+	if limiterResp != nil && limiterResp["ok"] != true {
+		errStr, _ := limiterResp["error"].(string)
+		if errStr == "" {
+			errStr = "limiter_rejected"
+		}
+		m.mu.Lock()
+		m.lastError = errStr
+		m.mu.Unlock()
+		m.logToJournal(ctx, "MISSION_HANDLER_LIMITER_ERROR", map[string]interface{}{
+			"error": errStr, "mission_id": mid,
+		})
+		return map[string]interface{}{"ok": false, "error": errStr}, nil
+	}
+	m.logToJournal(ctx, "MISSION_HANDLER_MISSION_SENT_TO_LIMITER", map[string]interface{}{"mission_id": mid})
+
 	resp, err := m.proxy.ProxyRequest(ctx, m.autopilotTopic, "mission_load", map[string]interface{}{"mission": mission})
 	if err != nil {
 		m.mu.Lock()
@@ -143,9 +168,6 @@ func (m *MissionHandler) handleLoadMission(ctx context.Context, message map[stri
 		return map[string]interface{}{"ok": false, "error": errStr}, nil
 	}
 	m.logToJournal(ctx, "MISSION_HANDLER_MISSION_SENT_TO_AUTOPILOT", map[string]interface{}{"mission_id": mid})
-	if err := m.proxy.ProxyPublishAsync(ctx, m.limiterTopic, "mission_load", map[string]interface{}{"mission": mission}); err != nil {
-		log.Printf("[%s] send mission to limiter: %v", m.ComponentID, err)
-	}
 	return map[string]interface{}{"ok": true}, nil
 }
 

@@ -47,6 +47,9 @@ type Limiter struct {
 	state                    string
 	lastNavPollTs            float64
 	lastTelemetryPollTs      float64
+	orvd                     orvdConfig
+	orvdStatus               string
+	orvdMissionID            string
 }
 
 // New creates a Limiter. Call Start after creation.
@@ -120,6 +123,12 @@ func New(cfg *config.Config, b bus.Bus) *Limiter {
 		JournalTopic: journalTopic,
 		Source:       "limiter",
 	}
+	l.orvd = loadORVDConfig(cfg.ComponentID, cfg.InstanceID, requestTimeout, l.proxy)
+	l.orvdStatus = ORVDStatusDisabled
+	if l.orvd.topic != "" {
+		log.Printf("[%s] ORVD enabled topic=%s action=%s drone_id=%s",
+			cfg.ComponentID, l.orvd.topic, l.orvd.action, l.orvd.droneID)
+	}
 	l.registerHandlers()
 	return l
 }
@@ -181,7 +190,7 @@ func (l *Limiter) pollTelemetryIfDue(ctx context.Context) {
 	}
 }
 
-func (l *Limiter) handleMissionLoad(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (l *Limiter) handleMissionLoad(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	if !component.IsTrustedSender(message, "security_monitor") {
 		return nil, nil
 	}
@@ -193,10 +202,49 @@ func (l *Limiter) handleMissionLoad(_ context.Context, message map[string]interf
 	if mission == nil {
 		return map[string]interface{}{"ok": false, "error": "invalid_mission"}, nil
 	}
+	mid, _ := mission["mission_id"].(string)
+
+	if ok, boundsErr := validateMissionBounds(mission, l.orvd.maxMissionAltM); !ok {
+		l.mu.Lock()
+		l.orvdStatus = ORVDStatusOutOfBounds
+		l.orvdMissionID = mid
+		l.mu.Unlock()
+		l.logToJournal(ctx, "LIMITER_MISSION_OUT_OF_BOUNDS", map[string]interface{}{
+			"mission_id": mid,
+			"error":      boundsErr,
+		})
+		return map[string]interface{}{"ok": false, "error": "mission_out_of_bounds"}, nil
+	}
+
 	l.mu.Lock()
-	l.mission = mission
+	l.orvdStatus = ORVDStatusPending
+	l.orvdMissionID = mid
 	l.mu.Unlock()
-	return map[string]interface{}{"ok": true}, nil
+
+	status, errMsg := l.requestORVDValidation(ctx, mission)
+	l.mu.Lock()
+	l.orvdStatus = status
+	l.orvdMissionID = mid
+	if status == ORVDStatusAuthorized {
+		l.mission = mission
+	}
+	l.mu.Unlock()
+
+	if status != ORVDStatusAuthorized {
+		if errMsg == "" {
+			errMsg = "orvd_denied"
+		}
+		return map[string]interface{}{
+			"ok":          false,
+			"error":       errMsg,
+			"orvd_status": status,
+		}, nil
+	}
+	return map[string]interface{}{
+		"ok":          true,
+		"orvd_status": status,
+		"mission_id":  mid,
+	}, nil
 }
 
 func (l *Limiter) handleUpdateConfig(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
@@ -231,6 +279,8 @@ func (l *Limiter) handleGetState(_ context.Context, _ map[string]interface{}) (m
 		"state":                    l.state,
 		"max_distance_from_path_m": l.maxDistanceFromPathM,
 		"max_alt_deviation_m":      l.maxAltDeviationM,
+		"orvd_status":              l.orvdStatus,
+		"orvd_mission_id":          l.orvdMissionID,
 	}, nil
 }
 

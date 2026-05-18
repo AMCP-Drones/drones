@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/AMCP-Drones/drones/systems/deliverydron/bus/src"
 	missionhandler "github.com/AMCP-Drones/drones/systems/deliverydron/mission_handler/src"
 	securitymonitor "github.com/AMCP-Drones/drones/systems/deliverydron/security_monitor/src"
 	"github.com/AMCP-Drones/drones/systems/deliverydron/tests/testutil"
@@ -109,7 +110,12 @@ func TestModule_MissionHandler_LoadMission_AutopilotError(t *testing.T) {
 			},
 		})
 	})
-	_ = mem.Subscribe(ctx, prefix+".limiter", func(map[string]interface{}) {})
+	_ = mem.Subscribe(ctx, prefix+".limiter", func(msg map[string]interface{}) {
+		if msg["action"] != "mission_load" {
+			return
+		}
+		_ = bus.Respond(ctx, mem, msg, map[string]interface{}{"ok": true, "orvd_status": "AUTHORIZED"}, "limiter", true, "")
+	})
 	_ = mem.Subscribe(ctx, prefix+".journal", func(map[string]interface{}) {})
 
 	mh := missionhandler.New(testutil.Config("mission_handler"), mem)

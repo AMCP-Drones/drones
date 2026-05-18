@@ -73,10 +73,15 @@ func New(cfg *config.Config, b bus.Bus) *SecurityMonitor {
 	base := component.NewBaseComponent(SecurityMonitorComponentID, "security_monitor", topic, b)
 	topicPrefix := cfg.TopicPrefix()
 	rawPolicies := os.Getenv("SECURITY_POLICIES")
+	orvdTopic := strings.TrimSpace(os.Getenv("ORVD_TOPIC"))
+	if orvdTopic == "" {
+		orvdTopic = strings.TrimSpace(os.Getenv("ORVD_EXTERNAL_TOPIC"))
+	}
 	rawPolicies = strings.ReplaceAll(rawPolicies, "${TOPIC_PREFIX}", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "${SYSTEM_NAME}", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "$${SYSTEM_NAME}", topicPrefix)
 	rawPolicies = strings.ReplaceAll(rawPolicies, "$SYSTEM_NAME", topicPrefix)
+	rawPolicies = strings.ReplaceAll(rawPolicies, "${ORVD_TOPIC}", orvdTopic)
 	policyAdmin := strings.TrimSpace(os.Getenv("POLICY_ADMIN_SENDER"))
 	timeout := 10.0
 	if t := os.Getenv("SECURITY_MONITOR_PROXY_REQUEST_TIMEOUT_S"); t != "" {

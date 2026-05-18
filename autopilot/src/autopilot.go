@@ -55,6 +55,7 @@ type Autopilot struct {
 	navigationTopic    string
 	motorsTopic        string
 	cargoTopic         string
+	limiterTopic       string
 	controlIntervalSec float64
 	navPollIntervalSec float64
 	requestTimeoutSec  float64
@@ -68,6 +69,7 @@ type Autopilot struct {
 	cargoState         string
 	koverActive        bool
 	lastNavPollTs      float64
+	lastError          string
 }
 
 // New creates an Autopilot. Call Start after creation.
@@ -89,6 +91,10 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 	navTopic := cfg.BrokerTopicFor("navigation")
 	motorsTopic := cfg.BrokerTopicFor("motors")
 	cargoTopic := cfg.BrokerTopicFor("cargo")
+	limiterTopic := strings.TrimSpace(os.Getenv("LIMITER_TOPIC"))
+	if limiterTopic == "" {
+		limiterTopic = cfg.BrokerTopicFor("limiter")
+	}
 	controlInterval := 0.2
 	navPollInterval := 0.1
 	requestTimeout := 5.0
@@ -114,6 +120,7 @@ func New(cfg *config.Config, b bus.Bus) *Autopilot {
 		navigationTopic:    navTopic,
 		motorsTopic:        motorsTopic,
 		cargoTopic:         cargoTopic,
+		limiterTopic:       limiterTopic,
 		controlIntervalSec: controlInterval,
 		navPollIntervalSec: navPollInterval,
 		requestTimeoutSec:  requestTimeout,
@@ -219,7 +226,7 @@ func (a *Autopilot) handleMissionLoad(_ context.Context, message map[string]inte
 	return map[string]interface{}{"ok": true, "state": a.state}, nil
 }
 
-func (a *Autopilot) handleCmd(_ context.Context, message map[string]interface{}) (map[string]interface{}, error) {
+func (a *Autopilot) handleCmd(ctx context.Context, message map[string]interface{}) (map[string]interface{}, error) {
 	if !component.IsTrustedSender(message, "security_monitor") {
 		return nil, nil
 	}
@@ -239,6 +246,14 @@ func (a *Autopilot) handleCmd(_ context.Context, message map[string]interface{})
 	if transition.RequireMission && a.mission == nil {
 		a.mu.Unlock()
 		return map[string]interface{}{"ok": false, "error": "no_mission"}, nil
+	}
+	if cmd == "START" {
+		if errKey := a.checkLimiterAuthorizationLocked(ctx); errKey != "" {
+			a.lastError = errKey
+			a.mu.Unlock()
+			return map[string]interface{}{"ok": false, "error": errKey}, nil
+		}
+		a.lastError = ""
 	}
 	if transition.AllowedFrom != nil {
 		if _, allowed := transition.AllowedFrom[a.state]; !allowed {
@@ -301,7 +316,31 @@ func (a *Autopilot) handleGetState(_ context.Context, _ map[string]interface{}) 
 		"total_steps":        totalSteps,
 		"cargo_state":        a.cargoState,
 		"last_nav_state":     a.lastNavState,
+		"last_error":         a.lastError,
 	}, nil
+}
+
+// checkLimiterAuthorizationLocked verifies limiter ORVD clearance. Caller must hold a.mu.
+func (a *Autopilot) checkLimiterAuthorizationLocked(ctx context.Context) string {
+	if a.mission == nil {
+		return "no_mission"
+	}
+	mid, _ := a.mission["mission_id"].(string)
+	a.mu.Unlock()
+	pl, err := a.proxy.ProxyRequest(ctx, a.limiterTopic, "get_state", map[string]interface{}{})
+	a.mu.Lock()
+	if err != nil {
+		return "limiter_not_cleared"
+	}
+	status, _ := pl["orvd_status"].(string)
+	if status != "AUTHORIZED" {
+		return "limiter_not_cleared"
+	}
+	orvdMid, _ := pl["orvd_mission_id"].(string)
+	if orvdMid != "" && mid != "" && orvdMid != mid {
+		return "mission_id_mismatch"
+	}
+	return ""
 }
 
 func (a *Autopilot) stepControl(ctx context.Context) {

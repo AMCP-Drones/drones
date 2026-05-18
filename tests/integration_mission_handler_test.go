@@ -47,9 +47,11 @@ func TestIntegration_MissionHandler_LoadMission(t *testing.T) {
 	})
 	limiterGot := false
 	_ = mem.Subscribe(ctx, limiterTopic, func(msg map[string]interface{}) {
-		if msg["action"] == "mission_load" {
-			limiterGot = true
+		if msg["action"] != "mission_load" {
+			return
 		}
+		limiterGot = true
+		_ = bus.Respond(ctx, mem, msg, map[string]interface{}{"ok": true, "orvd_status": "AUTHORIZED"}, "limiter", true, "")
 	})
 
 	j := journal.New(testutil.Config("journal"), mem)
