@@ -15,7 +15,10 @@ func New(cfg *config.Config) (Bus, error) {
 	case "kafka":
 		return kafka.New(cfg.KafkaBootstrap, cfg.ComponentID, cfg.KafkaGroupID, cfg.BrokerUser, cfg.BrokerPassword), nil
 	case "mqtt":
-		return mqtt.New(cfg.MQTTBroker, cfg.MQTTPort, cfg.ComponentID, cfg.MQTTQoS, cfg.BrokerUser, cfg.BrokerPassword), nil
+		return mqtt.New(
+			cfg.MQTTBroker, cfg.MQTTPort, cfg.ComponentID, cfg.MQTTQoS,
+			cfg.BrokerUser, cfg.BrokerPassword, cfg.ReplyBrokerTopic(),
+		), nil
 	default:
 		return nil, fmt.Errorf("unknown broker type: %q (use kafka or mqtt)", cfg.BrokerType)
 	}

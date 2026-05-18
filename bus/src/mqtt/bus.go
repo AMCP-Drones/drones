@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,8 +29,8 @@ type Bus struct {
 	running    bool
 }
 
-// New creates an MQTT bus.
-func New(broker string, port int, clientID string, qos int, username, password string) *Bus {
+// New creates an MQTT bus. replyTopic should be stable (e.g. from config.ReplyBrokerTopic) for broker ACL.
+func New(broker string, port int, clientID string, qos int, username, password, replyTopic string) *Bus {
 	if port <= 0 {
 		port = 1883
 	}
@@ -37,7 +38,9 @@ func New(broker string, port int, clientID string, qos int, username, password s
 	if qos >= 0 && qos <= 2 {
 		q = byte(qos)
 	}
-	replyTopic := "replies." + clientID + "." + fmt.Sprintf("%d", time.Now().UnixNano()%100000)
+	if strings.TrimSpace(replyTopic) == "" {
+		replyTopic = "replies." + clientID + "." + fmt.Sprintf("%d", time.Now().UnixNano()%100000)
+	}
 	return &Bus{
 		broker:     broker,
 		port:       port,

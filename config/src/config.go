@@ -120,11 +120,10 @@ func FromEnv() *Config {
 
 	cfg.KafkaBootstrap = kafkaBootstrap
 	cfg.KafkaGroupID = kafkaGroupID
-	cfg.BrokerUser = os.Getenv("BROKER_USER")
-	cfg.BrokerPassword = os.Getenv("BROKER_PASSWORD")
 	cfg.MQTTBroker = mqttBroker
 	cfg.MQTTPort = mqttPort
 	cfg.MQTTQoS = mqttQoS
+	cfg.BrokerUser, cfg.BrokerPassword = cfg.BrokerCredentials()
 	return cfg
 }
 
